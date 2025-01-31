@@ -1,0 +1,66 @@
+// Import required libraries 
+/*
+const express = require('express');
+const mongoose = require('mongoose');
+
+const app = express();
+const questionRoute = require('./routes/question'); // Import the question route module
+const userRoute = require('./routes/users'); // Import the users route module
+
+// Middleware
+app.use('/question', questionRoute);
+app.use('/users', userRoute);
+
+// Define the home route
+app.get('/', (req, res) => {
+    res.send('Home Page');
+});
+
+// Create another route for Question Bank
+app.get('/question', (req, res) => {
+    res.send("Where you post the Question");
+});
+
+// Create another route for users to connect via QR
+app.get('/usersQR', (req, res) => {
+    res.send("Where users connect via QR code");
+});
+
+// MongoDB connection string
+const MURL = 'mongodb+srv://oduroj01:letJESUSin123*@cluster0.mxkij.mongodb.net/?retryWrites=true&w=majority';
+
+// Connect to MongoDB
+mongoose.connect(MURL)
+    .then(() => {
+        console.log('MongoDB Connected');
+    })
+    .catch((err) => {
+        console.error('Error connecting to MongoDB:', err);
+    });
+
+// Start the server
+app.listen(3000, () => {
+    console.log('Server is up and running on port 3000...');
+});
+*/
+
+
+
+
+// second block
+
+/*
+// MongoDB connection string (use environment variables)
+const MURL = process.env.MONGO_URI || 'your-default-connection-string';
+
+// Connect to MongoDB
+mongoose.connect(MURL, { useNewUrlParser: true, useUnifiedTopology: true })
+    .then(() => {
+        console.log('MongoDB Connected');
+    })
+    .catch((err) => {
+        console.error('Error connecting to MongoDB:', err);
+    });
+    */
+
+    // MongoDB connection string

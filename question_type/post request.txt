@@ -1,0 +1,26 @@
+fetch('http://localhost:3000/question/test', {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+        no: 1,
+        Category: "Bible Character",
+        Character: "Noah",
+        Question: "How many people entered the ark with Noah?\n a) 2\n b) 6\n c) 8\n d) 12",
+        Answer: "c",
+        Options: {
+            a: "2",
+            b: "6",
+            c: "8",
+            d: "12"
+        },
+        Bible_reference: "Genesis 7:7",
+        Point: 10,
+        AgPoint: 5,
+        time: 30
+    })
+})
+.then(response => response.json())
+.then(data => console.log('Success:', data))
+.catch(error => console.error('Error:', error));
