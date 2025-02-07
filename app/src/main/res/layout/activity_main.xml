@@ -1,0 +1,146 @@
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <!-- User Profile Section (Top) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:padding="10dp">
+
+        <de.hdodenhof.circleimageview.CircleImageView
+            android:id="@+id/profileIcon"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            android:src="@drawable/ic_launcher_background"
+            android:layout_marginEnd="10dp"/>
+
+        <TextView
+            android:id="@+id/usernameTextView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Username"
+            android:textSize="20sp"/>
+
+        <!-- Quiz Category Dropdown -->
+        <Spinner
+            android:id="@+id/categorySpinner"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"/>
+
+
+    </LinearLayout>
+
+    <!-- Main Quiz Layout (Divided into 3 Sections) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="horizontal">
+
+        <!-- Left: Quiz Questions & Options -->
+        <LinearLayout
+            android:id="@+id/questionSection"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="3"
+            android:orientation="vertical"
+            android:padding="10dp">
+
+            <TextView
+                android:id="@+id/questionText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Question will appear here"
+                android:textSize="18sp"
+                android:padding="8dp"/>
+
+            <CheckBox
+                android:id="@+id/option1"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Option 1"/>
+
+            <CheckBox
+                android:id="@+id/option2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Option 2"/>
+
+            <CheckBox
+                android:id="@+id/option3"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Option 3"/>
+
+            <CheckBox
+                android:id="@+id/option4"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Option 4"/>
+        </LinearLayout>
+
+        <!-- Middle: Timer, Question Type, and Answer Reference -->
+        <LinearLayout
+            android:id="@+id/topSection"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="2"
+            android:orientation="vertical"
+            android:gravity="center">
+
+            <TextView
+                android:id="@+id/questionType"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Question Type: MCQ"
+                android:textSize="16sp"/>
+
+            <TextView
+                android:id="@+id/timerText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Time Left: 30s"
+                android:textSize="16sp"
+                android:textColor="@android:color/holo_red_light"/>
+
+            <TextView
+                android:id="@+id/answerReference"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Reference: [Book Name]"
+                android:textSize="14sp"
+                android:textColor="@android:color/holo_blue_dark"/>
+        </LinearLayout>
+
+        <!-- Right: Leaderboard -->
+        <LinearLayout
+            android:id="@+id/leaderboardSection"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="2"
+            android:orientation="vertical"
+            android:background="@android:color/darker_gray"
+            android:padding="8dp">
+
+            <TextView
+                android:id="@+id/leaderboardTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Leaderboard"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="@android:color/white"/>
+
+            <ListView
+                android:id="@+id/leaderboardList"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"/>
+        </LinearLayout>
+
+    </LinearLayout>
+</LinearLayout>
