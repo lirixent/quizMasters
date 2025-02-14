@@ -49,6 +49,7 @@ dependencies {
 
         implementation("com.journeyapps:zxing-android-embedded:4.3.0")
         implementation("androidx.appcompat:appcompat:1.5.1")
+    implementation("de.hdodenhof:circleimageview:3.1.0")
 
 
 
