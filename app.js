@@ -11,6 +11,7 @@ const questionRoute = require('./routes/question'); // Import the question route
 const userRoute = require('./routes/users'); // Import the users route module
 const postQuestionRoute = require('./routes/questionP');
 const updateQuestionRoute = require('./routes/questionU')
+const deleteQuestionRoute = require('./routes/questionD');
 
 
 
@@ -20,7 +21,9 @@ app.use('/question', questionRoute);
 app.use('/users', userRoute);
 app.use('/questionU', updateQuestionRoute)
 app.use('/questionP', postQuestionRoute)
+app.use('/questionD', deleteQuestionRoute);
 app.use(bodyParser.json());
+
 
 
 // Define the home route

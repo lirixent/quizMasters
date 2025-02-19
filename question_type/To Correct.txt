@@ -1,0 +1,3 @@
+Please note Question 90 is wrong delete it 
+To do
+Write a Script to delete question from the server
