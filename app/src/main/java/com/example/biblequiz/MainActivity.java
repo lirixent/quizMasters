@@ -30,6 +30,15 @@ import java.util.List;
 import de.hdodenhof.circleimageview.CircleImageView;
 
 
+import android.widget.Button;
+import java.util.Collections;
+import java.util.List;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
+import retrofit2.Retrofit;
+import retrofit2.converter.gson.GsonConverterFactory;
+
 public class MainActivity extends AppCompatActivity {
 
     private Spinner categorySpinner;
@@ -41,11 +50,18 @@ public class MainActivity extends AppCompatActivity {
     private RadioButton option1, option2, option3, option4;
     private RadioGroup answerGroup;
 
-    private String reference = "Exodus 3:10";
-    private String correctAnswer = "Moses";
+   // private String reference = "Exodus 3:10";
+    //private String correctAnswer = "Moses";
 
     private CountDownTimer countDownTimer;
     private long timeLeftInMillis = 30000; // 30 seconds
+
+    private question apiService;
+    private String correctAnswer;
+
+    private List<Question> questionList = new ArrayList<>();
+    private int currentIndex = 0;
+    private int questionNumber = 1;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -65,6 +81,9 @@ public class MainActivity extends AppCompatActivity {
         option3 = findViewById(R.id.option3);
         option4 = findViewById(R.id.option4);
         answerGroup = findViewById(R.id.answerGroup);
+
+
+        fetchQuestions();
 
         referenceText.setText("Reference: [Book Name]");
         correctAnswerText.setVisibility(View.GONE);
@@ -215,6 +234,44 @@ public class MainActivity extends AppCompatActivity {
         // TODO: Implement the logic for multiplayer mode
     }
 
+    private void fetchQuestions() {
+        Retrofit retrofit = new Retrofit.Builder()
+                .baseUrl("http://localhost:3000/")
+                .addConverterFactory(GsonConverterFactory.create())
+                .build();
+
+        question apiService = retrofit.create(question.class);
+        Call<QuestionResponse> call = apiService.getQuestions();
+
+        call.enqueue(new Callback<QuestionResponse>() {
+            @Override
+            public void onResponse(Call<QuestionResponse> call, Response<QuestionResponse> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    questionList = response.body().getQuestions();
+                    Collections.shuffle(questionList); // Shuffle questions
+                    showNextQuestion();
+                }
+            }
+
+            @Override
+            public void onFailure(Call<QuestionResponse> call, Throwable t) {
+                // Handle failure
+            }
+        });
+    }
+
+    private void showNextQuestion() {
+        if (currentIndex < questionList.size()) {
+            Question currentQuestion = questionList.get(currentIndex);
+            questionText.setText(currentQuestion.getQuestion());
+            referenceText.setText(currentQuestion.getBibleReference());
+            option1.setText(currentQuestion.getOptions().get("a"));
+            option2.setText(currentQuestion.getOptions().get("b"));
+            option3.setText(currentQuestion.getOptions().get("c"));
+            option4.setText(currentQuestion.getOptions().get("d"));
+            currentIndex++;
+        }
+    }
 
 
 }
