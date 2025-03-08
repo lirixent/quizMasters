@@ -57,10 +57,9 @@
                 android:id="@+id/questionText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Who did God call to lead the Israelites out of Egypt?"
+                android:text="Loading question..."
                 android:textSize="18sp"
-                android:textColor="@android:color/black"
-                android:paddingBottom="8dp"/>
+                android:textStyle="bold"/>
 
             <RadioGroup
                 android:id="@+id/answerGroup"
@@ -73,26 +72,38 @@
                     android:id="@+id/option1"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Moses"/>
+                    android:text="option1"/>
 
                 <RadioButton
                     android:id="@+id/option2"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Abraham"/>
+                    android:text="option2"/>
 
                 <RadioButton
                     android:id="@+id/option3"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Noah"/>
+                    android:text="option3"/>
 
                 <RadioButton
                     android:id="@+id/option4"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="David"/>
+                    android:text="option4"/>
             </RadioGroup>
+
+            <Button
+                android:id="@+id/nextQuestionButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Next Question"
+                android:layout_gravity="center_horizontal"
+                android:padding="10dp"
+                android:layout_marginTop="16dp"
+                android:backgroundTint="@color/purple_500"
+                android:textColor="@android:color/white"/>
+
         </LinearLayout>
 
         <!-- Right: Leaderboard & Quiz Info -->

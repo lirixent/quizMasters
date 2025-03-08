@@ -23,16 +23,20 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 
 //de.hdodenhof.circleimageview.CircleImageView;
 
 import de.hdodenhof.circleimageview.CircleImageView;
-
+import java.util.Map;
 
 import android.widget.Button;
 import java.util.Collections;
 import java.util.List;
+import java.util.Random;
+import java.util.Set;
+
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
@@ -46,20 +50,29 @@ public class MainActivity extends AppCompatActivity {
     private SharedPreferences sharedPreferences;
     private TextView usernameTextView;
     private CircleImageView profileIcon;
-    private TextView questionTypeText, timeLeftText, referenceText, correctAnswerText;
+    private TextView questionTypeText, timeLeftText, referenceText, questionText, correctAnswerText;
     private RadioButton option1, option2, option3, option4;
     private RadioGroup answerGroup;
+    private Button nextQuestionButton;
 
-   // private String reference = "Exodus 3:10";
+    private Questions currentQuestion;
+
+
+    // private String reference = "Exodus 3:10";
     //private String correctAnswer = "Moses";
+
+  //  String reference = currentQuestion.getReference(); // Ensure `currentQuestion` is defined
+//referenceText.setText("Reference: " + reference);
+
 
     private CountDownTimer countDownTimer;
     private long timeLeftInMillis = 30000; // 30 seconds
 
-    private question apiService;
+    private QuestionInterface apiService;
+
     private String correctAnswer;
 
-    private List<Question> questionList = new ArrayList<>();
+    private List<Questions> questionList = new ArrayList<>();
     private int currentIndex = 0;
     private int questionNumber = 1;
 
@@ -69,6 +82,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         // Initialize UI elements
+        questionText = findViewById(R.id.questionText);
         questionTypeText = findViewById(R.id.questionTypeText);
         timeLeftText = findViewById(R.id.timeLeftText);
         referenceText = findViewById(R.id.referenceText);
@@ -80,10 +94,11 @@ public class MainActivity extends AppCompatActivity {
         option2 = findViewById(R.id.option2);
         option3 = findViewById(R.id.option3);
         option4 = findViewById(R.id.option4);
+        nextQuestionButton = findViewById(R.id.nextQuestionButton);
         answerGroup = findViewById(R.id.answerGroup);
 
 
-        fetchQuestions();
+      //  fetchQuestions();
 
         referenceText.setText("Reference: [Book Name]");
         correctAnswerText.setVisibility(View.GONE);
@@ -111,7 +126,19 @@ public class MainActivity extends AppCompatActivity {
         usernameTextView = findViewById(R.id.usernameTextView);
         profileIcon = findViewById(R.id.profileIcon);
         checkAndPromptUsername();
+        fetchQuestions();
+
+        nextQuestionButton.setOnClickListener(v -> showNextQuestion());
+        answerGroup.setOnCheckedChangeListener((group, checkedId) -> checkAnswer(checkedId));
     }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        resetQuiz(); // Clear stored question numbers when the app closes
+    }
+
+
 
     private void checkAndPromptUsername() {
         String savedUsername = sharedPreferences.getString("username", null);
@@ -198,11 +225,26 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void onAnswerSelected(String selectedAnswer) {
-        correctAnswerText.setText("Correct Answer: " + correctAnswer);
-        referenceText.setText("Reference: " + reference);
+       // correctAnswerText.setText("Correct Answer: " + correctAnswer);
+
+        if (currentQuestion != null) {
+            referenceText.setText("Reference: " + currentQuestion.getReference());
+            correctAnswerText.setText("Correct Answer: " + correctAnswer);
+
+        } else {
+            referenceText.setText("Reference: N/A"); // Default text if no question is loaded
+            correctAnswerText.setText("Correct Answer: N/A");
+
+
+        }
         correctAnswerText.setVisibility(View.VISIBLE);
 
         Toast.makeText(this, selectedAnswer.equals(correctAnswer) ? "Correct!" : "Wrong! The correct answer is: " + correctAnswer, Toast.LENGTH_SHORT).show();
+
+
+       // correctAnswerText.setVisibility(View.VISIBLE);
+
+        //Toast.makeText(this, selectedAnswer.equals(correctAnswer) ? "Correct!" : "Wrong! The correct answer is: " + correctAnswer, Toast.LENGTH_SHORT).show();
     }
 
     private void startCountdown() {
@@ -235,42 +277,108 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void fetchQuestions() {
-        Retrofit retrofit = new Retrofit.Builder()
-                .baseUrl("http://localhost:3000/")
-                .addConverterFactory(GsonConverterFactory.create())
-                .build();
+        Retrofit retrofit = RetrofitClient.getInstance();
+        QuestionInterface service = retrofit.create(QuestionInterface.class);
 
-        question apiService = retrofit.create(question.class);
-        Call<QuestionResponse> call = apiService.getQuestions();
+        //QuestionInterface service = RetrofitClient.getInstance().create(QuestionInterface.class);
 
-        call.enqueue(new Callback<QuestionResponse>() {
+        service.getRandomQuestions().enqueue(new Callback<QuestionResponse>() {
             @Override
             public void onResponse(Call<QuestionResponse> call, Response<QuestionResponse> response) {
                 if (response.isSuccessful() && response.body() != null) {
-                    questionList = response.body().getQuestions();
-                    Collections.shuffle(questionList); // Shuffle questions
-                    showNextQuestion();
+
+                    questionList = response.body().getQuestions(); // Store all 203 questions
+                    usedQuestions.clear(); // Reset used questions tracking
+                    if (!questionList.isEmpty()) {
+                        showNextQuestion(); // Show first question
+                    } else {
+                        Toast.makeText(MainActivity.this, "No questions found!", Toast.LENGTH_SHORT).show();
+                    }
+                } else {
+                    Toast.makeText(MainActivity.this, "Failed to load questions!", Toast.LENGTH_SHORT).show();
                 }
             }
 
             @Override
             public void onFailure(Call<QuestionResponse> call, Throwable t) {
-                // Handle failure
+                Toast.makeText(MainActivity.this, "Error: " + t.getMessage(), Toast.LENGTH_SHORT).show();
             }
         });
+
     }
 
-    private void showNextQuestion() {
-        if (currentIndex < questionList.size()) {
-            Question currentQuestion = questionList.get(currentIndex);
-            questionText.setText(currentQuestion.getQuestion());
-            referenceText.setText(currentQuestion.getBibleReference());
-            option1.setText(currentQuestion.getOptions().get("a"));
-            option2.setText(currentQuestion.getOptions().get("b"));
-            option3.setText(currentQuestion.getOptions().get("c"));
-            option4.setText(currentQuestion.getOptions().get("d"));
-            currentIndex++;
+    private void displayQuestion(Questions question) {
+
+        currentQuestion = question; // Assign the current question
+        //questionText.setText(question.getQuestion());
+        //correctAnswer = question.getCorrectAnswer();
+
+        if (question == null) return; // Prevent crashes
+
+       // currentQuestion = question; // Assign the current question
+
+        questionText.setText(question.getQuestion());
+        referenceText.setText("Reference: " + question.getReference()); // Fixing the reference issue
+        correctAnswer = question.getCorrectAnswer(); // Store correct answer for validation
+
+      //  Map<String, String> options = question.getOptions();
+
+        option1.setText(question.getOption1());
+        option2.setText(question.getOption2());
+        option3.setText(question.getOption3());
+        option4.setText(question.getOption4());
+
         }
+
+
+private void checkAnswer(int checkedId) {
+    RadioButton selectedOption = findViewById(checkedId);
+    if (selectedOption != null) {
+        correctAnswerText.setText("Correct Answer: " + correctAnswer);
+        Toast.makeText(this, selectedOption.getText().equals(correctAnswer) ? "Correct!" : "Wrong!", Toast.LENGTH_SHORT).show();
+    }
+}
+
+    private Set<Integer> usedQuestions = new HashSet<>(); // Keep track of used questions
+    private Random random = new Random();
+
+
+    private void showNextQuestion() {
+        if (usedQuestions.size() >= questionList.size()) {
+            Toast.makeText(MainActivity.this, "You've completed the quiz!", Toast.LENGTH_SHORT).show();
+            resetQuiz();
+            return;
+        }
+
+        int index;
+        do {
+            index = random.nextInt(questionList.size()); // Pick a random question
+        } while (usedQuestions.contains(index)); // Ensure it's not a duplicate
+
+        usedQuestions.add(index); // Mark as used
+        displayQuestion(questionList.get(index)); // Show the question
+    }
+
+    private Questions getUniqueQuestion(List<Questions> newQuestions) {
+        SharedPreferences prefs = getSharedPreferences("QuizPrefs", MODE_PRIVATE);
+        Set<String> usedQuestions = prefs.getStringSet("used_questions", new HashSet<>());
+
+        for (Questions q : newQuestions) {
+            if (!usedQuestions.contains(q.getNo())) {
+                // ✅ Store new question
+                usedQuestions.add(String.valueOf(q.getNo()));
+
+                prefs.edit().putStringSet("used_questions", usedQuestions).apply();
+                return q;
+            }
+        }
+        return null; // No unique question found
+    }
+
+    private void resetQuiz() {
+        usedQuestions.clear(); // Reset used questions
+        Toast.makeText(this, "Quiz Reset! Starting again...", Toast.LENGTH_SHORT).show();
+        showNextQuestion();
     }
 
 
