@@ -4,11 +4,11 @@ const express = require('express');
 const mongoose = require('mongoose');
 
 const app = express();
-const questionRoute = require('./routes/question'); // Import the question route module
+const questionRoute = require('./routes/QuestionInterface'); // Import the QuestionInterface route module
 const userRoute = require('./routes/users'); // Import the users route module
 
 // Middleware
-app.use('/question', questionRoute);
+app.use('/QuestionInterface', questionRoute);
 app.use('/users', userRoute);
 
 // Define the home route
@@ -17,7 +17,7 @@ app.get('/', (req, res) => {
 });
 
 // Create another route for Question Bank
-app.get('/question', (req, res) => {
+app.get('/QuestionInterface', (req, res) => {
     res.send("Where you post the Question");
 });
 

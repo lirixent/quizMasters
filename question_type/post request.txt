@@ -1,4 +1,4 @@
-fetch('http://localhost:3000/question/test', {
+fetch('http://localhost:3000/QuestionInterface/test', {
     method: 'POST',
     headers: {
         'Content-Type': 'application/json'
