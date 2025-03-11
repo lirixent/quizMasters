@@ -5,4 +5,11 @@ import java.util.List;
 public class QuestionResponse {
     private List<Questions> questions;
     public List<Questions> getQuestions() { return questions; }
+
+    @Override
+    public String toString() {
+        return "QuestionResponse{" +
+                "questions=" + questions +
+                '}';
+    }
 }

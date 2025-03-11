@@ -1,5 +1,6 @@
 package com.example.biblequiz;
 
+import com.google.gson.Gson;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
@@ -8,6 +9,7 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.os.Bundle;
 import android.os.CountDownTimer;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.ArrayAdapter;
@@ -25,6 +27,7 @@ import androidx.core.content.ContextCompat;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Collections;
 
 //de.hdodenhof.circleimageview.CircleImageView;
 
@@ -45,8 +48,12 @@ import retrofit2.converter.gson.GsonConverterFactory;
 
 public class MainActivity extends AppCompatActivity {
 
+    private static final String TAG = "QuizApp"; // Define log tag
+
     private Spinner categorySpinner;
     private List<String> categories;
+
+    private List<Questions> allQuestions = new ArrayList<>();
     private SharedPreferences sharedPreferences;
     private TextView usernameTextView;
     private CircleImageView profileIcon;
@@ -81,6 +88,14 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+
+
+        // Initialize Retrofit
+        apiService = RetrofitClient.getInstance().create(QuestionInterface.class);
+
+        // Fetch all questions from the API
+        fetchAllQuestions();
+
         // Initialize UI elements
         questionText = findViewById(R.id.questionText);
         questionTypeText = findViewById(R.id.questionTypeText);
@@ -97,8 +112,6 @@ public class MainActivity extends AppCompatActivity {
         nextQuestionButton = findViewById(R.id.nextQuestionButton);
         answerGroup = findViewById(R.id.answerGroup);
 
-
-      //  fetchQuestions();
 
         referenceText.setText("Reference: [Book Name]");
         correctAnswerText.setVisibility(View.GONE);
@@ -130,14 +143,18 @@ public class MainActivity extends AppCompatActivity {
 
         nextQuestionButton.setOnClickListener(v -> showNextQuestion());
         answerGroup.setOnCheckedChangeListener((group, checkedId) -> checkAnswer(checkedId));
+
+
     }
+
+
+
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
         resetQuiz(); // Clear stored question numbers when the app closes
     }
-
 
 
     private void checkAndPromptUsername() {
@@ -149,6 +166,54 @@ public class MainActivity extends AppCompatActivity {
             showGameModeDialog();
         }
     }
+
+    private void fetchAllQuestions() {
+        Log.d("API_CALL", "Fetching all questions...");
+
+        Call<QuestionResponse> call = apiService.getAllQuestions();
+
+        call.enqueue(new Callback<QuestionResponse>() {
+            @Override
+            public void onResponse(Call<QuestionResponse> call, Response<QuestionResponse> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    try {
+                        // Log the raw response before parsing
+                        Log.d("API_RESPONSE", "Raw API Response: " + new Gson().toJson(response.body()));
+
+                        // Extract and log questions
+                        List<Questions> questions = response.body().getQuestions();
+                        if (questions != null && !questions.isEmpty()) {
+                            Log.d("API_RESPONSE", "Total Questions Fetched: " + questions.size());
+                            Log.d("API_RESPONSE", "First Question: " + questions.get(0).getQuestion());
+                        } else {
+                            Log.d("API_RESPONSE", "Question list is empty or null");
+                        }
+                    } catch (Exception e) {
+                        Log.e("API_RESPONSE", "Error processing response: " + e.getMessage());
+                    }
+                } else {
+                    Log.e("API_RESPONSE", "API call failed: " + response.errorBody());
+                }
+            }
+
+            @Override
+            public void onFailure(Call<QuestionResponse> call, Throwable t) {
+                Log.e("API_FAILURE", "Failed to fetch data: " + t.getMessage());
+            }
+        });
+    }
+    // Function to get random questions
+    public List<Questions> getRandomQuestions(int count) {
+        if (allQuestions.isEmpty()) {
+            Log.e("QUESTION_ERROR", "No questions available yet!");
+            return new ArrayList<>();
+        }
+
+        List<Questions> randomQuestions = new ArrayList<>(allQuestions);
+        Collections.shuffle(randomQuestions); // Shuffle to randomize
+        return randomQuestions.subList(0, Math.min(count, randomQuestions.size())); // Get 'count' questions
+    }
+
 
     private void showUsernameDialog() {
         LayoutInflater inflater = LayoutInflater.from(this);
@@ -255,6 +320,7 @@ public class MainActivity extends AppCompatActivity {
                 updateTimerText();
             }
 
+
             @Override
             public void onFinish() {
                 timeLeftText.setText("Time Up!");
@@ -277,34 +343,53 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void fetchQuestions() {
-        Retrofit retrofit = RetrofitClient.getInstance();
-        QuestionInterface service = retrofit.create(QuestionInterface.class);
+        apiService = RetrofitClient.getInstance().create(QuestionInterface.class);
+        Call<QuestionResponse> call = apiService.getAllQuestions();
 
-        //QuestionInterface service = RetrofitClient.getInstance().create(QuestionInterface.class);
-
-        service.getRandomQuestions().enqueue(new Callback<QuestionResponse>() {
+        call.enqueue(new Callback<QuestionResponse>() {
             @Override
             public void onResponse(Call<QuestionResponse> call, Response<QuestionResponse> response) {
                 if (response.isSuccessful() && response.body() != null) {
+                    List<Questions> questionsList = response.body().getQuestions();
 
-                    questionList = response.body().getQuestions(); // Store all 203 questions
-                    usedQuestions.clear(); // Reset used questions tracking
-                    if (!questionList.isEmpty()) {
-                        showNextQuestion(); // Show first question
-                    } else {
-                        Toast.makeText(MainActivity.this, "No questions found!", Toast.LENGTH_SHORT).show();
+                    if (questionsList == null || questionsList.isEmpty()) {
+                        Log.e("API Response", "Question list is empty or null!");
+                        return;
                     }
+
+                    // Get the first question (modify if you need multiple)
+                    Questions firstQuestion = questionsList.get(0);
+
+                    Log.d("API Response", "Fetched Question: " + firstQuestion.getQuestion());
+                    Log.d("API Response", "Reference: " + firstQuestion.getReference());
+
+                    // Update UI
+                    runOnUiThread(() -> {
+                        questionText.setText(safeText(firstQuestion.getQuestion(), "Loading Questions..."));
+                        option1.setText(safeText(firstQuestion.getOptions().get("a"), "Option1"));
+                        option2.setText(safeText(firstQuestion.getOptions().get("b"), "Option2"));
+                        option3.setText(safeText(firstQuestion.getOptions().get("c"), "Option3"));
+                        option4.setText(safeText(firstQuestion.getOptions().get("d"), "Option4"));
+
+                        referenceText.setText(safeText(firstQuestion.getReference(), "text reference"));
+                    });
+
                 } else {
-                    Toast.makeText(MainActivity.this, "Failed to load questions!", Toast.LENGTH_SHORT).show();
+                    Log.e("API Error", "Response not successful: " + response.errorBody());
                 }
             }
 
             @Override
             public void onFailure(Call<QuestionResponse> call, Throwable t) {
-                Toast.makeText(MainActivity.this, "Error: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                Log.e("API Failure", "Failed to fetch questions: " + t.getMessage());
             }
         });
+    }
+    // Utility function to prevent null values
 
+
+    private String safeText(String text, String defaultText) {
+        return (text != null && !text.isEmpty()) ? text : defaultText;
     }
 
     private void displayQuestion(Questions question) {
@@ -323,12 +408,13 @@ public class MainActivity extends AppCompatActivity {
 
       //  Map<String, String> options = question.getOptions();
 
-        option1.setText(question.getOption1());
-        option2.setText(question.getOption2());
-        option3.setText(question.getOption3());
-        option4.setText(question.getOption4());
+        option1.setText(question.getOptions().get("a"));
+        option2.setText(question.getOptions().get("b"));
+        option3.setText(question.getOptions().get("c"));
+        option4.setText(question.getOptions().get("d"));
 
-        }
+
+    }
 
 
 private void checkAnswer(int checkedId) {
