@@ -9,6 +9,9 @@ public class RetrofitClient {
     private static final String BASE_URL = "http://10.0.2.2:3000/"; // Maps to localhost:3000 for emulator
     private static Retrofit retrofit;
 
+    private static QuestionInterface questionInterface;  // ✅ Use your existing interface
+
+
     public static Retrofit getInstance() {
         if (retrofit == null) {
             // Configure OkHttpClient with increased timeout and retry on failure
@@ -25,7 +28,19 @@ public class RetrofitClient {
                     .client(client)  // Use custom OkHttpClient
                     .addConverterFactory(GsonConverterFactory.create())
                     .build();
+
+            questionInterface = retrofit.create(QuestionInterface.class);  // ✅ Initialize your interface
         }
         return retrofit;
     }
+
+    // ✅ Now provides QuestionInterface instead of APIService
+    public static QuestionInterface getQuestionAPI() {
+        if (questionInterface == null) {
+            getInstance();  // Ensure Retrofit is initialized
+        }
+        return questionInterface;
+    }
+
+
 }

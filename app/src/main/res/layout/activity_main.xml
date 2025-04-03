@@ -6,6 +6,8 @@
     android:padding="10dp"
     android:background="@android:color/white">
 
+
+
     <!-- User Profile Section (Top) -->
     <LinearLayout
         android:layout_width="match_parent"
@@ -53,6 +55,8 @@
             android:orientation="vertical"
             android:padding="12dp">
 
+
+
             <TextView
                 android:id="@+id/questionText"
                 android:layout_width="match_parent"
@@ -70,24 +74,28 @@
 
                 <RadioButton
                     android:id="@+id/option1"
+                    android:tag="A"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="option1"/>
 
                 <RadioButton
                     android:id="@+id/option2"
+                    android:tag="B"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="option2"/>
 
                 <RadioButton
                     android:id="@+id/option3"
+                    android:tag="C"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="option3"/>
 
                 <RadioButton
                     android:id="@+id/option4"
+                    android:tag="D"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="option4"/>
@@ -125,6 +133,8 @@
                 android:textStyle="bold"
                 android:textColor="@android:color/white"
                 android:paddingBottom="8dp"/>
+
+
 
             <TextView
                 android:id="@+id/questionTypeText"
@@ -169,5 +179,19 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"/>
         </LinearLayout>
+
+        <FrameLayout
+            android:id="@+id/fragment_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="gone"
+            android:background="@android:color/white"
+            />
+
     </LinearLayout>
+
+
+
+
 </LinearLayout>
+
