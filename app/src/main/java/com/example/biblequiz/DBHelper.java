@@ -85,27 +85,42 @@ public class DBHelper extends SQLiteOpenHelper {
     // ✅ Save Questions from API to SQLite
     public void saveQuestions(List<Questions> questions) {
         SQLiteDatabase db = this.getWritableDatabase();
-        Log.d("DBHelper", "Saving questions to the database...");
+      //  Log.d("DBHelper", "Saving questions to the database...");
+        Log.d("DBHelper", "Saving " + questions.size() + " questions to the database...");
+
+
 
 
         // db.delete(TABLE_NAME, null, null); // Clear old data
         db.beginTransaction();
+        int successCount = 0;
 
         try {
             for (Questions q : questions) {
                 ContentValues values = new ContentValues();
                 // values.put(COLUMN_NO, q.getNo());
-                values.put(COLUMN_ID, q.getId());
+                // Watch out for duplicate IDs
+             //   Log.d("DBHelper", "Inserting question with ID: " + q.getId());
+
+
+             //   values.put(COLUMN_ID, q.getId());
                 values.put(COLUMN_QUESTION, q.getQuestion());
                 values.put(COLUMN_OPTIONS, gson.toJson(q.getOptions())); // Convert Map to JSON
                 values.put(COLUMN_ANSWER, q.getCorrectAnswer());
                 values.put(COLUMN_REFERENCE, q.getReference());
 
-                //db.insert(TABLE_NAME, null, values);
-                db.insertWithOnConflict(TABLE_NAME, null, values, SQLiteDatabase.CONFLICT_REPLACE);
-                Log.d("DBHelper", "Inserted question");
+                long result = db.insertWithOnConflict(TABLE_NAME, null, values, SQLiteDatabase.CONFLICT_REPLACE);
+                if (result != -1) {
+                    successCount++;
+                } else {
+                    Log.e("DBHelper", "❌ Failed to insert question: " + q.getQuestion());
+                }
             }
+
             db.setTransactionSuccessful();
+            Log.d("DBHelper", "✅ Transaction successful. Inserted " + successCount + " questions.");
+        } catch (Exception e) {
+            Log.e("DBHelper", "❌ Error during insert transaction", e);
         } finally {
             db.endTransaction();
             db.close();
@@ -164,6 +179,25 @@ public class DBHelper extends SQLiteOpenHelper {
         db.close();
         return questionList;
     }
+
+    public int getQuestionCount() {
+        int count = 0;
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = db.rawQuery("SELECT COUNT(*) FROM questions", null);
+
+        if (cursor.moveToFirst()) {
+            count = cursor.getInt(0);
+        }
+
+        cursor.close();
+        db.close();
+
+        return count;
+    }
+
+
+
+
 
   /*  public void logTableSchema(SQLiteDatabase db) {
         Cursor cursor = db.rawQuery("PRAGMA table_info(questions);", null);

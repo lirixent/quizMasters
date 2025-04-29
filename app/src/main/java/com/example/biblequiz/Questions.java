@@ -17,6 +17,9 @@ public class Questions {
     @SerializedName("no")
     private int no;
 
+    @SerializedName("Category")
+    private String category;
+
     private int id;  // <-- Add ID here
 
     // ✅ Constructor
@@ -30,6 +33,10 @@ public class Questions {
     }
 
     public int getId() { return id; } // Getter for ID
+
+    public String getCategory() {
+        return category;
+    }
 
     public String getQuestion() { return question; }
     public Map<String, String> getOptions() { return options; }

@@ -11,6 +11,11 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
+import androidx.work.PeriodicWorkRequest;
+import androidx.work.WorkManager;
+import androidx.work.ExistingPeriodicWorkPolicy;
+import java.util.concurrent.TimeUnit;
+
 
 import androidx.work.*;
 import androidx.fragment.app.Fragment;
@@ -36,10 +41,12 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
@@ -78,6 +85,8 @@ import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
 
 public class MainActivity extends AppCompatActivity {
+
+    private int currentScore = 0;
 
     private ProgressBarFragment progressBarFragment;
 
@@ -121,8 +130,21 @@ public class MainActivity extends AppCompatActivity {
    // private int currentIndex = 0;      // Track current question index
 
     private DBHelper dbHelper;
+    //private static final String TAG = "MainActivity";
 
- /*   public MainActivity(){
+
+    CircleImageView leaderboardProfileIcon;
+    TextView leaderboardUserScoreText;
+
+    private boolean isQuestionLoading = false;
+    private boolean hasAnswered = false; // ✅ Class-level variable
+
+    int totalAnswered = 0;
+    int totalLeft;
+    int currentRound = 1;
+    Set<Questions> usedQuestions = new HashSet<>();
+
+    /*   public MainActivity(){
 
 
     }
@@ -181,13 +203,25 @@ public class MainActivity extends AppCompatActivity {
             RadioButton selectedOption = findViewById(checkedId);
             if (selectedOption != null) {
              //   startCountdown();
-                onAnswerSelected(selectedOption.getText().toString());
+            //    onAnswerSelected(selectedOption.getText().toString());
             }
         });
 
         updateQuizDetails("MCQ", "00:30", "[Book Name]");
 
         categorySpinner = findViewById(R.id.categorySpinner);
+
+        categorySpinner.setOnTouchListener((v, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                if (categories.size() < 3 && !hasFetchedCategoriesBefore()) {
+                    fetchCategoriesFromAPI();
+                }
+            }
+            return false;
+        });
+
+
+
         categories = new ArrayList<>();
         categories.add("Bible Quiz");
         categories.add("Truth or Dare");
@@ -199,15 +233,33 @@ public class MainActivity extends AppCompatActivity {
         sharedPreferences = getSharedPreferences("QuizApp", Context.MODE_PRIVATE);
         usernameTextView = findViewById(R.id.usernameTextView);
         profileIcon = findViewById(R.id.profileIcon);
+
+        leaderboardProfileIcon = findViewById(R.id.leaderboardProfileIcon);
+        leaderboardUserScoreText = findViewById(R.id.leaderboardUserScoreText);
+
+
+
+
         checkAndPromptUsername();
         //fetchQuestions();
 
-        nextQuestionButton.setOnClickListener(v -> showNextQuestion());
+
+
+
+
+
+        nextQuestionButton.setOnClickListener(v ->{
+            resetQuestionUI();
+            showNextQuestion();});
         answerGroup.setOnCheckedChangeListener((group, checkedId) -> checkAnswer(checkedId));
 
 
         DBHelper dbHelper = new DBHelper(this);
-        SQLiteDatabase db = dbHelper.getReadableDatabase();
+
+
+           SQLiteDatabase db = dbHelper.getReadableDatabase();
+
+
 
 // Check how many questions exist in the database
         Cursor cursor = db.rawQuery("SELECT COUNT(*) FROM questions", null);
@@ -220,22 +272,65 @@ public class MainActivity extends AppCompatActivity {
 
         if (questionCount == 0) {
             Log.d("MainActivity", "Database is empty. Fetching questions from API...");
-            fetchAndSaveQuestions();
+            fetchAllQuestions();
+            triggerBackgroundPopulationIfNeeded();
+
+
+        } else if (questionCount < 190) {
+            Log.d("MainActivity", "Database has " + questionCount + " questions, fetching more to reach 201...");
+            fetchAllQuestions();
+            triggerBackgroundPopulationIfNeeded();
+
         } else {
             Log.d("MainActivity", "Database is populated. Using questions from database.");
             sqlite2List();
         }
 
-        selectedQuestions = new ArrayList<>();
+/*        selectedQuestions = new ArrayList<>();
         //currentQuestionIndex = 0;
-        selectedQuestions = getRandomQuestions(5);
+        selectedQuestions = getRandomQuestions(50);
 
 // Display the first question
         Log.d("QuizApp", "Total selected questions: " + selectedQuestions.size());
         for (Questions q : selectedQuestions) {
             Log.d("QuizApp", "Question: " + q.getQuestion());
         }
+*/
+        // Periodic check for new questions beyond 190 (every 12 hours)
+       // PeriodicWorkRequest updateWorkRequest =
+             //   new PeriodicWorkRequest.Builder(QuestionCheckWorker.class, 12, TimeUnit.HOURS)
+              //  new PeriodicWorkRequest.Builder(QuestionCheckWorker.class, 15, TimeUnit.MINUTES)
+                PeriodicWorkRequest debugWorkRequest =
+                new PeriodicWorkRequest.Builder(QuestionCheckWorker.class, 1, TimeUnit.HOURS)
 
+
+
+              //  OneTimeWorkRequest debugRequest =
+                //new OneTimeWorkRequest.Builder(QuestionCheckWorker.class)
+                  //      .setInitialDelay(10, TimeUnit.SECONDS) // Short delay for debug
+                        .build();
+      //  WorkManager.getInstance(this).enqueue(debugWorkRequest);
+     /*  WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+                "QuestionCheckWorker",
+                ExistingPeriodicWorkPolicy.KEEP,
+                updateWorkRequest
+
+*/
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+                "question_check_debug",
+                ExistingPeriodicWorkPolicy.REPLACE, // Replace if already exists (good for testing)
+                debugWorkRequest
+        );
+
+        // Log to confirm scheduling
+        Log.d("QuizApp", "⏳ PeriodicWorkRequest scheduled to run every 1 hour.");
+
+
+
+        String username = sharedPreferences.getString("username", "User");
+        String initials = getInitials(username);
+        createProfileIcon(initials, leaderboardProfileIcon); // updated method below
+        leaderboardUserScoreText.setText("Score: " + currentScore);
 
 
     }
@@ -248,6 +343,65 @@ public class MainActivity extends AppCompatActivity {
         super.onDestroy();
         resetQuiz(); // Clear stored question numbers when the app closes
     }
+
+    private void triggerBackgroundPopulationIfNeeded() {
+        DBHelper dbHelper = new DBHelper(this);
+        int questionCount = dbHelper.getQuestionCount();
+
+        Log.d("MainActivity", "Trigger background worker check: Current DB count = " + questionCount);
+
+
+        if (questionCount < 190) {
+            Log.d("MainActivity", "Starting background population of questions via WorkManager...");
+
+
+            Data inputData = new Data.Builder()
+                    .putBoolean("initial_fetch", true)
+                    .build();
+
+            OneTimeWorkRequest fetchRequest = new OneTimeWorkRequest.Builder(QuestionCheckWorker.class)
+                    .setInputData(inputData)
+                    .build();
+
+            WorkManager.getInstance(this).enqueue(fetchRequest);
+        }else {
+            Log.d("MainActivity", "Database already has 190 or more questions, no need for background fetch.");
+
+        }
+    }
+
+
+    private void checkLocalDBAndDecide() {
+        if (dbHelper != null) {
+            SQLiteDatabase db = dbHelper.getReadableDatabase();
+            Cursor cursor = db.rawQuery("SELECT COUNT(*) FROM questions", null);
+            int questionCount = 0;
+            if (cursor.moveToFirst()) {
+                questionCount = cursor.getInt(0);
+            }
+            cursor.close();
+            db.close();
+
+            if (questionCount == 0 || questionCount < 201) {
+                Log.d(TAG, "Fetching from API since DB has: " + questionCount + " questions");
+                fetchAllQuestions(); // ✅ Populate DB from API
+            } else {
+                Log.d(TAG, "Using local DB: " + questionCount + " questions");
+                sqlite2List(); // ✅ Use local DB
+
+                // Check if new questions exist in background and push notification
+                OneTimeWorkRequest workRequest = new OneTimeWorkRequest.Builder(QuestionCheckWorker.class).build();
+                WorkManager.getInstance(this).enqueue(workRequest);
+            }
+        }
+    }
+
+
+
+
+
+
+
 
 
     private void checkAndPromptUsername() {
@@ -284,11 +438,11 @@ public class MainActivity extends AppCompatActivity {
 
                     allQuestions.clear(); // Clear previous questions before storing new ones
                     allQuestions.addAll(questions);
-                    if (allQuestions.size() >= 5) {
-                        selectedQuestions = getRandomQuestions(5);
+                    if (allQuestions.size() >= 50) {
+                        selectedQuestions = getRandomQuestions(50);
                         currentIndex = 0;
 
-                        Log.d("QuizApp", "Selected 5 questions for quiz:");
+                        Log.d("QuizApp", "Selected 50 questions for quiz:");
                         for (Questions q : selectedQuestions) {
                             Log.d("QuizApp", "Selected Question: " + q.getQuestion());
                         }
@@ -459,7 +613,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void displayUserInfo(String username) {
         usernameTextView.setText(username);
-        createProfileIcon(getInitials(username));
+        createProfileIcon(getInitials(username), leaderboardProfileIcon);
     }
 
     private String getInitials(String name) {
@@ -468,7 +622,7 @@ public class MainActivity extends AppCompatActivity {
         return words[0].substring(0, 1).toUpperCase() + words[1].substring(0, 1).toUpperCase();
     }
 
-    private void createProfileIcon(String initials) {
+    private void createProfileIcon(String initials, ImageView imageView) {
         int size = 150;
         Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
@@ -484,7 +638,10 @@ public class MainActivity extends AppCompatActivity {
         float x = size / 2;
         float y = (size / 2) - (fontMetrics.ascent + fontMetrics.descent) / 2;
         canvas.drawText(initials, x, y, paint);
+
         profileIcon.setImageBitmap(bitmap);
+
+        imageView.setImageBitmap(bitmap);
     }
 
     private void showGameModeDialog() {
@@ -505,45 +662,70 @@ public class MainActivity extends AppCompatActivity {
 
     private void updateQuizDetails(String questionType, String timeLeft, String reference) {
         questionTypeText.setText("Question Type: " + questionType);
+
+
+
+
         timeLeftText.setText("Time Left: " + timeLeft);
         referenceText.setText("Reference: " + reference);
         correctAnswerText.setVisibility(View.GONE);
     }
 
     private void onAnswerSelected(String selectedAnswer) {
-       // correctAnswerText.setText("Correct Answer: " + correctAnswer);
+        if (hasAnswered) return; // 🚫 Prevent double handling
+
+        hasAnswered = true;
+
 
         if (currentQuestion != null) {
+            // Get the correct answer key (A, B, C, D)
+            String correctAnswerKey = currentQuestion.getCorrectAnswer();
 
+            // Get the actual answer text for the correct answer key
+            String correctAnswerTextValue = currentQuestion.getOptions().get(correctAnswerKey);
 
-
-
-
-
-
-
+            // Display correct answer text and reference, but initially keep them hidden
+            correctAnswerText.setText("Correct Answer: " + correctAnswerTextValue);
             referenceText.setText("Reference: " + currentQuestion.getReference());
-            correctAnswerText.setText("Correct Answer: " + correctAnswer);
 
+            // Make them visible only after an answer is selected
+            correctAnswerText.setVisibility(View.VISIBLE);
+            referenceText.setVisibility(View.VISIBLE);
+
+            // Debugging Log
+            Log.d("QuizApp", "Selected Answer: " + selectedAnswer);
+            Log.d("QuizApp", "Correct Answer Key: " + correctAnswerKey);
+            Log.d("QuizApp", "Correct Answer Text: " + correctAnswerTextValue);
+
+            // Disable answer options immediately after processing the answer
+            disableAnswers();
+
+
+
+            // Compare the selected answer TEXT with the correct answer TEXT
+            if (selectedAnswer.equals(correctAnswerTextValue)) {
+                Toast.makeText(this, "Correct!", Toast.LENGTH_SHORT).show();
+
+                currentScore++;
+                leaderboardUserScoreText.setText("Score: " + currentScore);
+
+
+            } else {
+                Toast.makeText(this, "Wrong! The correct answer is: " + correctAnswerTextValue, Toast.LENGTH_SHORT).show();
+
+
+            }
         } else {
-            referenceText.setText("Reference: N/A"); // Default text if no question is loaded
+            // Default values if no question is loaded
             correctAnswerText.setText("Correct Answer: N/A");
+            referenceText.setText("Reference: N/A");
+
+            correctAnswerText.setVisibility(View.INVISIBLE);
+            referenceText.setVisibility(View.INVISIBLE);
 
 
         }
-        correctAnswerText.setVisibility(View.VISIBLE);
-// Debugging Log
-        Log.d("QuizApp", "Selected Answer: " + selectedAnswer);
-        Log.d("QuizApp", "Correct Answer: " + correctAnswer);
-
-        // Compare the selected answer to the correct one
-        if (selectedAnswer.equals(correctAnswer)) {
-            Toast.makeText(this, "Correct!", Toast.LENGTH_SHORT).show();
-        } else {
-            // Show the correct answer if the selected answer is wrong
-            Toast.makeText(this, "Wrong! The correct answer is: " + correctAnswer, Toast.LENGTH_SHORT).show();
-        }
-       }
+    }
 
     private void startCountdown() {
         countDownTimer = new CountDownTimer(timeLeftInMillis, 1000) {
@@ -557,6 +739,24 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onFinish() {
                 timeLeftText.setText("Time Up!");
+
+
+
+// Reveal the correct answer and reference when time runs out
+                if (currentQuestion != null) {
+                    String correctAnswerKey = currentQuestion.getCorrectAnswer();
+                    String correctAnswerTextValue = currentQuestion.getOptions().get(correctAnswerKey);
+
+                    correctAnswerText.setText("Correct Answer: " + correctAnswerTextValue);
+                    referenceText.setText("Reference: " + currentQuestion.getReference());
+
+                    // Make sure they are visible
+                    correctAnswerText.setVisibility(View.VISIBLE);
+                    referenceText.setVisibility(View.VISIBLE);
+                }
+
+                // Disable answer selection
+                disableAnswers();
             }
         }.start();
     }
@@ -564,6 +764,36 @@ public class MainActivity extends AppCompatActivity {
     private void updateTimerText() {
         timeLeftText.setText("Time Left: " + (int) (timeLeftInMillis / 1000) + "s");
     }
+
+    // Disable radio buttons when time runs out
+    private void disableAnswers() {
+        for (int i = 0; i < answerGroup.getChildCount(); i++) {
+            answerGroup.getChildAt(i).setEnabled(false);
+        }
+    }
+    // Enable radio buttons when a new question is loaded
+    private void enableAnswers() {
+        for (int i = 0; i < answerGroup.getChildCount(); i++) {
+            answerGroup.getChildAt(i).setEnabled(true);
+        }
+    }
+
+    private void resetQuestionUI() {
+        // Hide answer and reference views
+        correctAnswerText.setVisibility(View.INVISIBLE);
+        referenceText.setVisibility(View.INVISIBLE);
+
+        // Enable all answer options again
+        enableAnswers();
+
+        // Clear the correct answer and reference text
+        correctAnswerText.setText("");
+        referenceText.setText("");
+
+        // Optionally clear any selection, if you’re using RadioButtons or similar
+        // radioGroup.clearCheck();  // Uncomment if using RadioGroup
+    }
+
 
     private void startSinglePlayerMode() {
         Toast.makeText(this, "Starting Single Player Mode...", Toast.LENGTH_SHORT).show();
@@ -635,6 +865,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void sqlite2List() {
+        Log.d("MainActivity", "✅ sqlite2List() method called");
+
+
         allQuestions.clear(); // Clear previous questions before loading new ones
 
         DBHelper dbHelper = new DBHelper(this);
@@ -664,10 +897,12 @@ public class MainActivity extends AppCompatActivity {
         cursor.close();
         db.close();
 
-        if (allQuestions.size() >= 5) {
-            selectedQuestions = getRandomQuestions(5);
+        if (allQuestions.size() >= 50) {
+            selectedQuestions = getRandomQuestions(50);
             currentIndex = 0;
+
             showNextQuestion();
+
         } else {
             Log.e("QuizApp", "❌ Not enough questions in SQLite!");
             Toast.makeText(getApplicationContext(), "Not enough questions available!", Toast.LENGTH_SHORT).show();
@@ -684,16 +919,21 @@ public class MainActivity extends AppCompatActivity {
 
 
         DBHelper dbHelper = new DBHelper(this);
-        SQLiteDatabase db = dbHelper.getReadableDatabase();
-
-
-
         SQLiteDatabase writableDb = dbHelper.getWritableDatabase();
+        SQLiteDatabase readableDb = dbHelper.getReadableDatabase();
+
+
+        // Show ProgressBar before starting
+        showProgressFragment();
+
+//        SQLiteDatabase writableDb = dbHelper.getWritableDatabase();
 
 // Check for NULL values in any column
         try {
             // Check how many questions exist
-            Cursor cursor = writableDb.rawQuery("SELECT COUNT(*) FROM questions", null);
+           // Cursor cursor = writableDb.rawQuery("SELECT COUNT(*) FROM questions", null);
+            Cursor cursor = readableDb.rawQuery("SELECT COUNT(*) FROM questions", null);
+
             int questionCount = 0;
             if (cursor.moveToFirst()) {
                 questionCount = cursor.getInt(0);
@@ -702,13 +942,14 @@ public class MainActivity extends AppCompatActivity {
 
             Log.d("QuizApp", "Questions in SQLite: " + questionCount);
 
-            if (questionCount > 0) {
+            if (questionCount >= 201) {
                 //Validate and fix missing/ null values
                 Log.d("QuizApp", "Checking and fixing null values in SQLite before loading.");
 
                 fixNullValuesDatabase(writableDb);
                 // Load from SQLite
                 sqlite2List();
+                hideProgressFragment();
             }
             else {
                 // Fetch from API if no data is found
@@ -722,6 +963,13 @@ public class MainActivity extends AppCompatActivity {
             if (writableDb != null && writableDb.isOpen()) {
                 writableDb.close();
             }
+
+            if (readableDb != null && readableDb.isOpen()) {
+                readableDb.close();
+            }
+
+            hideProgressFragment();
+
         }
     }
 
@@ -732,7 +980,7 @@ public class MainActivity extends AppCompatActivity {
                 if (response.isSuccessful() && response.body() != null) {
                     List<Questions> questionsList = response.body().getQuestions();
                     dbHelper.saveQuestions(questionsList);
-                    logAllQuestions(writableDb);  // Log after saving
+                 //   logAllQuestions(writableDb);  // Log after saving
                     sqlite2List();
                 }
                 hideProgressFragment();
@@ -741,6 +989,12 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onFailure(Call<QuestionResponse> call, Throwable t) {
                 Log.e("API_ERROR", "Fetch failed: " + t.getMessage());
+
+                if (t instanceof java.net.SocketTimeoutException) {
+                    Log.d("QuizApp", "Retrying API call due to timeout...");
+                    fetchQuestionsFromAPI(dbHelper, writableDb); // Retry
+                }
+
                 hideProgressFragment();
             }
         });
@@ -881,13 +1135,30 @@ public class MainActivity extends AppCompatActivity {
         // Ensure options map is not null before accessing it
         Map<String, String> options = randomQuestion.getOptions();
         if (options != null) {
-            Log.d("QuizApp", "Options retrieved: " + options.toString());
+            //Log.d("QuizApp", "Options retrieved: " + options.toString());
+
+            // Create a new map with uppercase keys for case-insensitive lookup
+            Map<String, String> normalizedOptions = new HashMap<>();
+            for (Map.Entry<String, String> entry : options.entrySet()) {
+                normalizedOptions.put(entry.getKey().toUpperCase(), entry.getValue());
+            }
+
+
+
+/*
             option1.setText(options.containsKey("A") ? options.get("A") : "Option A");
             option2.setText(options.containsKey("B") ? options.get("B") : "Option B");
             option3.setText(options.containsKey("C") ? options.get("C") : "Option C");
             option4.setText(options.containsKey("D") ? options.get("D") : "Option D");
 
+*/
 
+            Log.d("QuizApp", "Normalized Options: " + normalizedOptions.toString());
+
+            option1.setText(normalizedOptions.getOrDefault("A", "Option A"));
+            option2.setText(normalizedOptions.getOrDefault("B", "Option B"));
+            option3.setText(normalizedOptions.getOrDefault("C", "Option C"));
+            option4.setText(normalizedOptions.getOrDefault("D", "Option D"));
 
         } else {
             Log.e("QuizApp", "randomQuestion options are null, setting default values.");
@@ -912,16 +1183,16 @@ public class MainActivity extends AppCompatActivity {
     if (selectedOption != null) {
        // correctAnswerText.setText("Correct Answer: " + correctAnswer);
         onAnswerSelected(selectedOption.getText().toString());
-        Toast.makeText(this, selectedOption.getText().equals(correctAnswer) ? "Correct!" : "Wrong!", Toast.LENGTH_SHORT).show();
+     //   Toast.makeText(this, selectedOption.getText().equals(correctAnswer) ? "Correct!" : "Wrong!", Toast.LENGTH_SHORT).show();
 
-        if(selectedOption.equals(correctAnswer)){
+       /* if(selectedOption.equals(correctAnswer)){
             Toast.makeText(this, "Correct!", Toast.LENGTH_SHORT).show();
 
         }
         else{
             Toast.makeText(this, "Wrong! The correct answer is: " + selectedOption.getText().equals(correctAnswer), Toast.LENGTH_SHORT).show();
         }
-
+*/
 
     }
 }
@@ -932,13 +1203,27 @@ public class MainActivity extends AppCompatActivity {
 
 
 
-    private Set<Integer> usedQuestions = new HashSet<>(); // Keep track of used questions
+//    private Set<Integer> usedQuestions = new HashSet<>(); // Keep track of used questions
     private Random random = new Random();
 
-
+/*
     public void showNextQuestion() {
+
+        if (isQuestionLoading) {
+            Log.d("QuizApp", "showNextQuestion skipped — already in progress.");
+            return;
+        }
+
+        isQuestionLoading = true;
+        hasAnswered = false; // 🔑 Reset answer state for the new question
+      //  Log.d("QuizApp", "---- showNextQuestion CALLED ----");
+        Log.d("QuizApp", "---- showNextQuestion CALLED ----");
+
+
+
         // Cancel the existing countdown if it's running
         if (countDownTimer != null) {
+            Log.d("QuizApp", "Countdown timer cancelled.");
             countDownTimer.cancel();
         }
 
@@ -947,6 +1232,12 @@ public class MainActivity extends AppCompatActivity {
 
         // Restart the countdown
         startCountdown();
+        Log.d("QuizApp", "Countdown timer started.");
+
+
+        // Re-enable answer selection
+        enableAnswers();
+        Log.d("QuizApp", "Answer options enabled.");
 
 
         // Reset UI components before setting new question
@@ -954,6 +1245,7 @@ public class MainActivity extends AppCompatActivity {
         correctAnswerText.setText(""); // Clears the correct answer display
         correctAnswerText.setVisibility(View.INVISIBLE); // Hide correct answer text
         referenceText.setText(""); // Clears reference
+        referenceText.setVisibility(View.GONE);
         questionText.setText(""); // Clears the question
 
 
@@ -963,21 +1255,28 @@ public class MainActivity extends AppCompatActivity {
 
         if (selectedQuestions == null || selectedQuestions.isEmpty()) {
             Toast.makeText(this, "No questions available!", Toast.LENGTH_SHORT).show();
+            isQuestionLoading = false;
             return;
         }
 
         if (currentIndex >= selectedQuestions.size()) {
             Toast.makeText(this, "You've completed the quiz!", Toast.LENGTH_SHORT).show();
+
+            isQuestionLoading = false;
             return;
         }
 
         // Get the next question from the list
         Questions nextQuestion = selectedQuestions.get(currentIndex);
 
+        // Display question & log
+        displayQuestion(nextQuestion);
+
 
         // Log question details for debugging
         Log.d("QuizApp", "Displaying question at index: " + currentIndex);
         Log.d("QuizApp", "Question: " + nextQuestion.getQuestion());
+
 
 
         // Retrieve options and confirm they're properly fetched
@@ -998,7 +1297,7 @@ public class MainActivity extends AppCompatActivity {
 
 
         // Display the question
-        displayQuestion(nextQuestion);
+     //   displayQuestion(nextQuestion);
 
       //  correctAnswer = nextQuestion.getCorrectAnswer(); // Store correct answer for validation
         //Log.d("QuizApp", "Correct Answer Set: " + correctAnswer);
@@ -1007,8 +1306,122 @@ public class MainActivity extends AppCompatActivity {
         // Move to the next index
         currentIndex++;
 
+        // Reset the loading flag after short delay (adjust to match animation/transition time if needed)
+        new Handler().postDelayed(() -> {
+            isQuestionLoading = false;
+            Log.d("QuizApp", "isQuestionLoading reset.");
+        }, 400); // 400ms delay to buffer UI overlap
+
 
     }
+*/
+
+    public void showNextQuestion() {
+        if (isQuestionLoading) {
+            Log.d("QuizApp", "showNextQuestion skipped — already in progress.");
+            return;
+        }
+
+        isQuestionLoading = true;
+
+        // Step 1: Prevent accidental re-triggers
+        if (countDownTimer != null) {
+            Log.d("QuizApp", "Countdown timer cancelled.");
+            countDownTimer.cancel();
+        }
+
+        // Step 2: Reset answer-related state before anything else
+        hasAnswered = false;
+        answerGroup.setOnCheckedChangeListener(null); // Remove listener temporarily
+        answerGroup.clearCheck(); // Prevents triggering onAnswerSelected accidentally
+        enableAnswers(); // Must be after clearCheck
+        Log.d("QuizApp", "Answer options enabled & cleared.");
+
+        // Step 3: Reset texts & views
+        correctAnswerText.setText("");
+        correctAnswerText.setVisibility(View.INVISIBLE);
+        referenceText.setText("");
+        referenceText.setVisibility(View.GONE);
+        questionText.setText("");
+if(totalAnswered<=50) {
+    totalAnswered++;
+}
+else{
+    Toast.makeText(this, "You've completed the quiz!", Toast.LENGTH_SHORT).show();
+
+}
+        totalLeft = 50 - totalAnswered;
+        questionTypeText.setText("Question Type: MCQ = " + 50 + " | " + totalAnswered + " answered, " + totalLeft + " left");
+
+
+
+        // Step 4: Reset the countdown timer
+        timeLeftInMillis = 30000;
+        startCountdown();
+        Log.d("QuizApp", "Countdown timer restarted.");
+
+        // Step 5: Validate questions
+        if (selectedQuestions == null || selectedQuestions.isEmpty()) {
+            Toast.makeText(this, "No questions available!", Toast.LENGTH_SHORT).show();
+            isQuestionLoading = false;
+
+            return;
+        }
+
+        if (currentIndex >= selectedQuestions.size()) {
+           // Toast.makeText(this, "You've completed the quiz!", Toast.LENGTH_SHORT).show();
+            isQuestionLoading = false;
+
+            AlertDialog.Builder builder = new AlertDialog.Builder(this);
+            builder.setTitle("Round Complete!");
+            builder.setMessage("You've completed Round " + currentRound + ".\nYour score: " + currentScore + " / 50.\nProceed to next round?");
+
+            builder.setPositiveButton("Next Round", (dialog, which) -> {
+                prepareNextRound(); // We'll create this method
+            });
+
+            builder.setNegativeButton("Exit", (dialog, which) -> {
+                finish(); // Close activity or go to main menu
+            });
+
+            builder.setCancelable(false);
+            builder.show();
+
+
+
+            return;
+        }
+
+        // Step 6: Load and show question
+        currentQuestion = selectedQuestions.get(currentIndex);
+        displayQuestion(currentQuestion);
+        Log.d("QuizApp", "Displaying question at index: " + currentIndex);
+
+        // Step 7: Reattach the listener AFTER setting up UI
+        answerGroup.setOnCheckedChangeListener((group, checkedId) -> {
+            if (checkedId != -1 && !hasAnswered) {
+                RadioButton selectedRadioButton = findViewById(checkedId);
+                if (selectedRadioButton != null) {
+                    String selectedAnswer = selectedRadioButton.getText().toString();
+                    onAnswerSelected(selectedAnswer);
+                }
+            }
+        });
+
+        // Step 8: Update index for next question
+        currentIndex++;
+
+        // Step 9: Reset the loading flag
+        new Handler().postDelayed(() -> {
+            isQuestionLoading = false;
+            Log.d("QuizApp", "isQuestionLoading reset.");
+        }, 400);
+    }
+
+
+
+
+
 
     private Questions getUniqueQuestion(List<Questions> newQuestions) {
         SharedPreferences prefs = getSharedPreferences("QuizPrefs", MODE_PRIVATE);
@@ -1026,11 +1439,97 @@ public class MainActivity extends AppCompatActivity {
         return null; // No unique question found
     }
 
+
+    private void prepareNextRound() {
+        currentRound++;
+
+        // Filter out used questions
+        List<Questions> remainingQuestions = new ArrayList<>();
+        for (Questions q : allQuestions) {
+            if (!usedQuestions.contains(q)) {
+                remainingQuestions.add(q);
+            }
+        }
+
+        if (remainingQuestions.size() == 0) {
+            Toast.makeText(this, "No more questions. Game over!", Toast.LENGTH_LONG).show();
+            finish(); // or go to a Game Over screen
+            return;
+        }
+
+        // Shuffle and pick new 50
+        Collections.shuffle(remainingQuestions);
+        selectedQuestions = remainingQuestions.subList(0, 50);
+        usedQuestions.addAll(selectedQuestions);
+
+        currentScore = 0;
+        currentIndex = 0;
+        showNextQuestion();
+    }
+
+
     private void resetQuiz() {
         usedQuestions.clear(); // Reset used questions
         Toast.makeText(this, "Quiz Reset! Starting again...", Toast.LENGTH_SHORT).show();
         showNextQuestion();
     }
+    private boolean hasFetchedCategoriesBefore() {
+        SharedPreferences prefs = getSharedPreferences("AppPrefs", MODE_PRIVATE);
+        return prefs.getBoolean("categoriesFetched", false);
+    }
+
+    private void markCategoriesAsFetched() {
+        SharedPreferences prefs = getSharedPreferences("AppPrefs", MODE_PRIVATE);
+        prefs.edit().putBoolean("categoriesFetched", true).apply();
+    }
+
+
+    private void fetchCategoriesFromAPI() {
+        showProgressFragment();
+
+        QuestionInterface apiService = RetrofitClient.getInstance().create(QuestionInterface.class);
+        Call<QuestionResponse> call = apiService.getAllQuestions();
+
+        call.enqueue(new Callback<QuestionResponse>() {
+            @Override
+            public void onResponse(Call<QuestionResponse> call, Response<QuestionResponse> response) {
+                hideProgressFragment();
+
+                if (response.isSuccessful() && response.body() != null) {
+                    Set<String> keywordsSet = new HashSet<>();
+
+                    for (Questions question : response.body().getQuestions()) {
+                        String category = question.getCategory();
+                        if (category != null && !category.isEmpty()) {
+                            keywordsSet.add(extractKeyword(category));
+                        }
+                    }
+
+                    List<String> newCategories = new ArrayList<>(keywordsSet);
+                    Collections.sort(newCategories);  // Optional: sort for UI friendliness
+                    categories.addAll(newCategories);
+
+                    ((ArrayAdapter<String>) categorySpinner.getAdapter()).notifyDataSetChanged();
+
+                    markCategoriesAsFetched();  // Save preference
+                    Log.d("QuizApp", "Categories fetched and spinner updated.");
+                } else {
+                    Toast.makeText(getApplicationContext(), "Failed to load categories.", Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onFailure(Call<QuestionResponse> call, Throwable t) {
+                hideProgressFragment();
+                Toast.makeText(getApplicationContext(), "API call failed: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private String extractKeyword(String categoryName) {
+        return categoryName.split(" ")[0];  // Simple, clean
+    }
+
 
 
 }

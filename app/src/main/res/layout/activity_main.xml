@@ -173,6 +173,28 @@
                 android:paddingTop="5dp"
                 android:visibility="gone"/>
 
+            <!-- Profile Icon with Initials -->
+            <de.hdodenhof.circleimageview.CircleImageView
+                android:id="@+id/leaderboardProfileIcon"
+                android:layout_width="60dp"
+                android:layout_height="60dp"
+                android:layout_gravity="center"
+                android:layout_marginTop="8dp"
+                android:src="@drawable/ic_launcher_background"/>
+
+            <!-- Score Text -->
+            <TextView
+                android:id="@+id/leaderboardUserScoreText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Score: 0"
+                android:textColor="#333"
+                android:textSize="16sp"
+                android:layout_marginTop="4dp"
+                android:layout_gravity="center" />
+
+
+
             <ListView
                 android:id="@+id/leaderboardList"
                 android:layout_width="match_parent"
