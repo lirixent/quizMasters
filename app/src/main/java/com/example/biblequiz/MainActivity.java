@@ -213,9 +213,9 @@ public class MainActivity extends AppCompatActivity {
 
         categorySpinner.setOnTouchListener((v, event) -> {
             if (event.getAction() == MotionEvent.ACTION_DOWN) {
-                if (categories.size() < 3 && !hasFetchedCategoriesBefore()) {
+               // if (categories.size() < 3 && !hasFetchedCategoriesBefore()) {
                     fetchCategoriesFromAPI();
-                }
+              //  }
             }
             return false;
         });
@@ -1451,7 +1451,7 @@ else{
             }
         }
 
-        if (remainingQuestions.size() == 0) {
+        if (remainingQuestions.size() <= 50) {
             Toast.makeText(this, "No more questions. Game over!", Toast.LENGTH_LONG).show();
             finish(); // or go to a Game Over screen
             return;
@@ -1484,6 +1484,50 @@ else{
     }
 
 
+   // private void saveCategoriesToPrefs(Set<String> keywords) {
+   private void saveCategoriesToPrefs(){
+        SharedPreferences prefs = getSharedPreferences("AppPrefs", MODE_PRIVATE);
+        SharedPreferences.Editor editor = prefs.edit();
+
+
+
+        StringBuilder builder = new StringBuilder();
+        for (String keyword : categories) {
+            builder.append(keyword).append(",");  // Comma-separated
+        }
+
+
+        editor.putString("savedCategories", builder.toString());
+        //editor.putStringSet("savedCategories", keywords);
+
+        // Save timestamp of last update
+        //editor.putLong("lastCategoryUpdate", System.currentTimeMillis());
+
+        editor.apply();
+    }
+
+    private int getStoredCategoryCount(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences("AppPrefs", Context.MODE_PRIVATE);
+        Set<String> stored = prefs.getStringSet("savedCategories", new HashSet<>());
+        return stored.size();
+    }
+
+    private long getLastCategoryUpdateTimestamp(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences("AppPrefs", Context.MODE_PRIVATE);
+        return prefs.getLong("lastCategoryUpdate", 0);
+    }
+
+
+
+
+    private List<String> getStoredCategoriesFromPrefs() {
+        SharedPreferences prefs = getSharedPreferences("AppPrefs", MODE_PRIVATE);
+        String stored = prefs.getString("savedCategories", "");
+        return Arrays.asList(stored.split(","));
+    }
+
+
+
     private void fetchCategoriesFromAPI() {
         showProgressFragment();
 
@@ -1507,12 +1551,15 @@ else{
 
                     List<String> newCategories = new ArrayList<>(keywordsSet);
                     Collections.sort(newCategories);  // Optional: sort for UI friendliness
+                    categories.clear();  // Optional: reset categories
+
+
                     categories.addAll(newCategories);
 
                     ((ArrayAdapter<String>) categorySpinner.getAdapter()).notifyDataSetChanged();
 
-                    markCategoriesAsFetched();  // Save preference
-                    Log.d("QuizApp", "Categories fetched and spinner updated.");
+                    saveCategoriesToPrefs();  // Now stores keywords instead of blocking fetch
+                    Log.d("QuizApp", "Categories fetched and saved.");
                 } else {
                     Toast.makeText(getApplicationContext(), "Failed to load categories.", Toast.LENGTH_SHORT).show();
                 }

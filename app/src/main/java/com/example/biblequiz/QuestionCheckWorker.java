@@ -21,6 +21,7 @@ import retrofit2.Call;
 import retrofit2.Response;
 
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Random;
 
@@ -29,6 +30,7 @@ public class QuestionCheckWorker extends Worker {
         super(context, workerParams);
     }
 
+    /*
     @NonNull
     @Override
     public Result doWork() {
@@ -37,7 +39,13 @@ public class QuestionCheckWorker extends Worker {
         boolean initialFetch = getInputData().getBoolean("initial_fetch", false);
 
         if (initialFetch) {
+            Log.d("QuestionCheckWorker", "🌱 Initial fetch triggered. Fetching all questions...");
+
+
             fetchAndSaveQuestionsToSQLite(); // ✅ run only if needed
+
+            Log.d("QuestionCheckWorker", "✅ Initial fetch completed.");
+
             return Result.success();
         }
 
@@ -54,7 +62,127 @@ public class QuestionCheckWorker extends Worker {
         return Result.success();
     }
 
-    private boolean checkForNewQuestions() {
+
+    */
+    /*
+
+    @NonNull
+    @Override
+    public Result doWork() {
+        Log.d("QuestionCheckWorker", "🔁 doWork() started: Checking for new questions...");
+
+        boolean initialFetch = getInputData().getBoolean("initial_fetch", false);
+
+        if (initialFetch) {
+            Log.d("QuestionCheckWorker", "🌱 Initial fetch requested. Starting fetchAndSaveQuestionsToSQLite...");
+            fetchAndSaveQuestionsToSQLite();
+            Log.d("QuestionCheckWorker", "✅ Initial fetch complete.");
+            return Result.success();
+        }
+
+        try {
+            boolean newQuestionsAvailable = checkForNewQuestions();
+
+            if (newQuestionsAvailable) {
+                Log.d("QuestionCheckWorker", "📣 New questions detected. Sending notification and saving...");
+                sendNotification();
+                fetchAndSaveQuestionsToSQLite();
+            } else {
+                Log.d("QuestionCheckWorker", "🟢 No new questions found. Worker finished cleanly.");
+            }
+
+            return Result.success();
+        } catch (Exception e) {
+            Log.e("QuestionCheckWorker", "❌ Exception in doWork: ", e);
+            return Result.retry(); // allow retry if an error occurred
+        }
+    }
+*/
+
+    @NonNull
+    @Override
+    public Result doWork() {
+        Log.d("QuestionCheckWorker", "🔁 doWork() started: Checking for new questions...");
+
+        boolean initialFetch = getInputData().getBoolean("initial_fetch", false);
+
+        if (initialFetch) {
+            Log.d("QuestionCheckWorker", "🌱 Initial fetch requested. Starting fetchAndSaveQuestionsToSQLite...");
+            fetchAndSaveQuestionsToSQLite();
+            Log.d("QuestionCheckWorker", "✅ Initial fetch complete.");
+            return Result.success();
+        }
+
+        try {
+            // Get API response directly so we can reuse it
+            QuestionInterface api = RetrofitClient.getQuestionAPI();
+            Response<QuestionResponse> response = api.getAllQuestions().execute();
+
+            if (response.isSuccessful() && response.body() != null) {
+                List<Questions> apiQuestions = response.body().getQuestions();
+
+                if (apiQuestions == null || apiQuestions.isEmpty()) {
+                    Log.d("QuestionCheckWorker", "⚠️ API returned no questions. Exiting early.");
+                    return Result.success();
+                }
+
+                // Check for new questions
+                boolean newQuestionsAvailable = checkForNewQuestions(apiQuestions);
+                // Check and update categories
+                checkAndUpdateCategories(apiQuestions);
+
+                if (newQuestionsAvailable) {
+                    Log.d("QuestionCheckWorker", "📣 New questions detected. Sending notification and saving...");
+                    sendNotification();
+                    fetchAndSaveQuestionsToSQLite();
+                } else {
+                    Log.d("QuestionCheckWorker", "🟢 No new questions found. Worker finished cleanly.");
+                }
+
+            } else {
+                Log.e("QuestionCheckWorker", "❌ API call failed: " + response.message());
+            }
+
+            return Result.success();
+        } catch (Exception e) {
+            Log.e("QuestionCheckWorker", "❌ Exception in doWork: ", e);
+            return Result.retry(); // allow retry if an error occurred
+        }
+    }
+    private void checkAndUpdateCategories(List<Questions> apiQuestions) {
+        SharedPreferences prefs = getApplicationContext().getSharedPreferences("QuizPrefs", Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = prefs.edit();
+
+        // Count distinct categories
+        java.util.Set<String> categorySet = new java.util.HashSet<>();
+        for (Questions q : apiQuestions) {
+            if (q.getCategory() != null) {
+                categorySet.add(q.getCategory());
+            }
+        }
+
+        int newCount = categorySet.size();
+        int oldCount = prefs.getInt("category_count", 0);
+
+        if (newCount != oldCount) {
+            Log.d("Worker", "🔁 Categories updated in background. New count: " + newCount);
+            String timeNow = null;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                timeNow = LocalDateTime.now().toString();
+            }
+            Log.d("Worker", "📆 Last category update time: " + timeNow);
+
+            editor.putInt("category_count", newCount);
+            editor.putString("last_category_update_time", timeNow);
+            editor.apply();
+        } else {
+            Log.d("Worker", "✅ No category update needed. Old/New count: " + newCount);
+        }
+    }
+
+
+/*
+    private boolean checkForNewQuestions(List<Questions> apiQuestions) {
         try {
             // 1. Get local row count
             DBHelper dbHelper = new DBHelper(getApplicationContext());
@@ -66,6 +194,8 @@ public class QuestionCheckWorker extends Worker {
             }
             cursor.close();
             db.close();
+
+            int apiCount = apiQuestions.size();
 
             // 2. Get count from API
             QuestionInterface api = RetrofitClient.getQuestionAPI();
@@ -95,6 +225,38 @@ public class QuestionCheckWorker extends Worker {
         return false;
     }
 
+    */
+
+
+    private boolean checkForNewQuestions(List<Questions> apiQuestions) {
+        try {
+            // 1. Get local row count
+            DBHelper dbHelper = new DBHelper(getApplicationContext());
+            SQLiteDatabase db = dbHelper.getReadableDatabase();
+            Cursor cursor = db.rawQuery("SELECT COUNT(*) FROM questions", null);
+            int localCount = 0;
+            if (cursor.moveToFirst()) {
+                localCount = cursor.getInt(0);
+            }
+            cursor.close();
+            db.close();
+
+            int apiCount = apiQuestions.size();
+
+            // 2. Get last saved count from SharedPreferences
+            SharedPreferences prefs = getApplicationContext().getSharedPreferences("QuizPrefs", Context.MODE_PRIVATE);
+            int savedCount = prefs.getInt("saved_api_count", 0);
+
+            Log.d("Worker", "Local DB: " + localCount + ", API: " + apiCount + ", Saved: " + savedCount);
+
+            return (apiCount > savedCount || apiCount > localCount);
+        } catch (Exception e) {
+            Log.e("Worker", "Error checking questions", e);
+            return false;
+        }
+    }
+
+
     private void sendNotification() {
         Log.d("QuestionCheckWorker", "📲 sendNotification() called");
 
@@ -116,7 +278,10 @@ public class QuestionCheckWorker extends Worker {
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setAutoCancel(true);
 
-        manager.notify(1, builder.build());
+       // manager.notify(1, builder.build());
+
+        // Unique notification ID
+        manager.notify((int) System.currentTimeMillis(), builder.build());
 
         Log.d("QuestionCheckWorker", "✅ Notification pushed successfully");
     }
