@@ -1,4 +1,4 @@
-package com.example.biblequiz;
+package com.example.quizmaster;
 
 import android.content.Context;
 

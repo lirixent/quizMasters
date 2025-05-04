@@ -1,5 +1,7 @@
 <LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:ads="http://schemas.android.com/apk/res-auto"
+
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
@@ -63,6 +65,7 @@
                 android:layout_height="wrap_content"
                 android:text="Loading question..."
                 android:textSize="18sp"
+                android:textColor="#212121"
                 android:textStyle="bold"/>
 
             <RadioGroup
@@ -77,6 +80,7 @@
                     android:tag="A"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:textColor="#212121"
                     android:text="option1"/>
 
                 <RadioButton
@@ -84,6 +88,7 @@
                     android:tag="B"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:textColor="#212121"
                     android:text="option2"/>
 
                 <RadioButton
@@ -91,6 +96,7 @@
                     android:tag="C"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:textColor="#212121"
                     android:text="option3"/>
 
                 <RadioButton
@@ -98,6 +104,7 @@
                     android:tag="D"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:textColor="#212121"
                     android:text="option4"/>
             </RadioGroup>
 
@@ -211,6 +218,15 @@
             />
 
     </LinearLayout>
+
+    <com.google.android.gms.ads.AdView
+        android:id="@+id/adView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:layout_alignParentBottom="true"
+        ads:adSize="BANNER"
+        ads:adUnitId="ca-app-pub-6768873008958793/1564912817"  /> <!-- Your test banner ad unit -->
 
 
 

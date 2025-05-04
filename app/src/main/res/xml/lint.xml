@@ -1,0 +1,3 @@
+<lint>
+    <issue id="CustomAppComponentFactory" severity="ignore" />
+</lint>
