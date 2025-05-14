@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Join Game</title>
+</head>
+<body>
+  <h2>Welcome to Bible Quiz</h2>
+  <form id="joinForm" method="POST">
+    <label for="name">Enter your name:</label>
+    <input type="text" id="name" name="name" required>
+    <button type="submit">Join Game</button>
+  </form>
+  <script>
+    // Dynamically post to correct session URL
+    const sessionId = window.location.pathname.split('/').pop();
+    const form = document.getElementById('joinForm');
+    form.action = `/users/setname/${sessionId}`;
+  </script>
+</body>
+</html>

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Game On</title>
+</head>
+<body>
+  <h2>Bible Quiz Game</h2>
+  <div id="questionBox"></div>
+  <div id="answers"></div>
+  <script>
+    const socket = new WebSocket('ws://' + location.hostname + ':3000');
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionId = urlParams.get('session');
+    const playerName = urlParams.get('name');
+
+    socket.onopen = () => {
+      socket.send(JSON.stringify({
+        event: 'readyForQuestions',
+        sessionId,
+        payload: { name: playerName }
+      }));
+    };
+
+    socket.onmessage = (msg) => {
+      const data = JSON.parse(msg.data);
+      if (data.event === 'newQuestion') {
+        const { question, options } = data.payload;
+        document.getElementById('questionBox').textContent = question;
+        const answers = document.getElementById('answers');
+        answers.innerHTML = '';
+        options.forEach(option => {
+          const btn = document.createElement('button');
+          btn.textContent = option;
+          btn.onclick = () => {
+            socket.send(JSON.stringify({
+              event: 'submitAnswer',
+              sessionId,
+              payload: {
+                name: playerName,
+                answer: option
+              }
+            }));
+            btn.disabled = true;
+          };
+          answers.appendChild(btn);
+        });
+      }
+    };
+  </script>
+</body>
+</html>

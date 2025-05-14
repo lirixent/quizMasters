@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Waiting for Host</title>
+</head>
+<body>
+  <h2>Waiting for Host to Start the Game...</h2>
+  <p id="status">Connecting to server...</p>
+  <script>
+    const socket = new WebSocket('ws://' + location.hostname + ':3000');
+    const sessionId = new URLSearchParams(window.location.search).get('session');
+    const playerName = new URLSearchParams(window.location.search).get('name');
+
+    socket.onopen = () => {
+      document.getElementById('status').textContent = 'Connected. Waiting for host...';
+      socket.send(JSON.stringify({
+        event: 'joinSession',
+        sessionId,
+        payload: { name: playerName }
+      }));
+    };
+
+    socket.onmessage = (msg) => {
+      const data = JSON.parse(msg.data);
+      if (data.event === 'hostStarted') {
+        window.location.href = `/game.html?session=${sessionId}&name=${playerName}`;
+      }
+    };
+  </script>
+</body>
+</html>

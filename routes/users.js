@@ -1,176 +1,162 @@
 const express = require('express');
-const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const QRCode = require('qrcode');
 const axios = require('axios');
 
+module.exports = function (gameSessions) {
+    const router = express.Router();
 
-// In-memory storage (replace with DB or Redis in production)
-let gameSessions = {};
+    // Route: Host a new multiplayer session
+    router.get('/host', async (req, res) => {
+        const sessionId = uuidv4();
 
-// Host a new multiplayer session
-router.get('/host', async (req, res) => {
-    const sessionId = uuidv4();
-    gameSessions[sessionId] = {
-        hostStarted: false,
-        players: []
-    };
+        gameSessions[sessionId] = {
+            hostStarted: false,
+            players: [],
+            scores: {},
+            currentQuestion: null,
+            currentQuestionIndex: 0,
+            questions: []
+        };
 
-    const joinUrl = `http://34.59.157.47:3000/users/join/${sessionId}`;
-    const qrCodeData = await QRCode.toDataURL(joinUrl);
+        const joinUrl = `http://34.59.157.47:3000/users/join/${sessionId}`;
+        const qrCodeData = await QRCode.toDataURL(joinUrl);
 
-    res.send(`
-        <html>
-            <body>
-                <h2>Multiplayer Game Lobby</h2>
-                <p>Session ID: ${sessionId}</p>
-                <img src="${qrCodeData}" alt="Scan to join"/>
-                <p>Or click: <a href="${joinUrl}">${joinUrl}</a></p>
-            </body>
-        </html>
-    `);
-});
+        res.send(`
+            <html>
+                <body>
+                    <h2>Multiplayer  Quiz Lobby</h2>
+                    <p><strong>Session ID:</strong> ${sessionId}</p>
+                    <img src="${qrCodeData}" alt="Scan to join"/>
+                    <p>Or click: <a href="${joinUrl}">${joinUrl}</a></p>
+                    <form action="/users/start/${sessionId}" method="POST">
+                        <button type="submit">Start Game</button>
+                    </form>
+                </body>
+            </html>
+        `);
+    });
 
-// Player joins session via QR or link
-router.get('/join/:sessionId', (req, res) => {
-    const { sessionId } = req.params;
+    // Route: Player joins via QR or link
+    router.get('/join/:sessionId', (req, res) => {
+        const { sessionId } = req.params;
 
-    if (!gameSessions[sessionId]) {
-        return res.status(404).send('Session not found');
-    }
+        if (!gameSessions[sessionId]) {
+            return res.status(404).send('Session not found.');
+        }
 
-    res.send(`
-        <html>
-            <body>
-                <h3>Welcome Player</h3>
-                <p>Joined game session: ${sessionId}</p>
-                <form action="/users/setname/${sessionId}" method="POST">
-                    <input type="text" name="name" placeholder="Enter your name" required />
-                    <button type="submit">Join Game</button>
-                </form>
-            </body>
-        </html>
-    `);
-});
+        res.send(`
+            <html>
+                <body>
+                    <h3>Welcome Player</h3>
+                    <p>Game Session: ${sessionId}</p>
+                    <form action="/users/setname/${sessionId}" method="POST">
+                        <input type="text" name="name" placeholder="Enter your name" required />
+                        <button type="submit">Join Game</button>
+                    </form>
+                </body>
+            </html>
+        `);
+    });
 
-// Route: GET /users/lobby/:sessionId
-router.get('/lobby/:sessionId', (req, res) => {
-    const { sessionId } = req.params;
+    // Route: Register player and inject WebSocket join logic
+    router.post('/setname/:sessionId', express.urlencoded({ extended: true }), (req, res) => {
+        const { sessionId } = req.params;
+        const { name } = req.body;
 
-    if (!gameSessions[sessionId]) {
-        return res.status(404).send('Session not found');
-    }
+        const session = gameSessions[sessionId];
+        if (!session) {
+            return res.status(404).send('Session not found.');
+        }
 
-    const players = gameSessions[sessionId].players;
+        const existing = session.players.find(p => p.name === name);
+        if (existing) {
+            return res.send(`<p>Name "${name}" already taken in this session. Please go back and choose another.</p>`);
+        }
 
-    res.send(`
-        <html>
-            <head>
-                <meta http-equiv="refresh" content="5"> <!-- Refresh every 5s -->
-            </head>
-            <body>
-                <h2>Lobby for Session: ${sessionId}</h2>
-                <p>Players joined:</p>
-                <ul>
-                    ${players.map(p => `<li>${p.name}</li>`).join('')}
-                </ul>
-                <form method="POST" action="/users/start/${sessionId}">
-                    <button type="submit">Start Game</button>
-                </form>
-            </body>
-        </html>
-    `);
-});
+        session.players.push({ name });
+        session.scores[name] = 0;
 
+        res.send(`
+            <html>
+                <body>
+                    <h3>Hello ${name}, you have joined the game!</h3>
+                    <p>Keep this tab open. The game will begin soon...</p>
+                    <script>
+                        const ws = new WebSocket('ws://' + location.hostname + ':3000');
+                        ws.onopen = () => {
+                            ws.send(JSON.stringify({
+                                event: 'joinSession',
+                                sessionId: '${sessionId}',
+                                payload: { name: '${name}' }
+                            }));
+                        };
+                    </script>
+                </body>
+            </html>
+        `);
+    });
 
-// Capture player name
-router.post('/setname/:sessionId', express.urlencoded({ extended: true }), (req, res) => {
-    const { sessionId } = req.params;
-    const { name } = req.body;
+    // Route: Host starts the game and loads questions
+    router.post('/start/:sessionId', async (req, res) => {
+        const { sessionId } = req.params;
+        const session = gameSessions[sessionId];
 
-    if (!gameSessions[sessionId]) {
-        return res.status(404).send('Session not found');
-    }
+        if (!session) {
+            return res.status(404).send('Session not found.');
+        }
 
-    gameSessions[sessionId].players.push({ name, score: 0 });
+        try {
+            const response = await axios.get('http://34.59.157.47:3000/question/test');
+            const allQuestions = response.data.questions;
 
-    res.send(`
-        <html>
-            <body>
-                <h3>Hello ${name}, you've joined successfully!</h3>
-                <p>Waiting for the host to start the game...</p>
-            </body>
-        </html>
-    `);
-});
+            if (!Array.isArray(allQuestions) || allQuestions.length === 0) {
+                return res.status(500).send('No questions found.');
+            }
 
-router.post('/start/:sessionId', async (req, res) => {
-    const { sessionId } = req.params;
+            const shuffled = allQuestions.sort(() => 0.5 - Math.random());
+            const selectedQuestions = shuffled.slice(0, 50);
 
-    if (!gameSessions[sessionId]) {
-        return res.status(404).send('Session not found');
-    }
+            session.questions = selectedQuestions;
+            session.currentQuestionIndex = 0;
+            session.currentQuestion = selectedQuestions[0];
+            session.hostStarted = true;
 
-    try {
-        // Fetch question bank from your server
-        const response = await axios.get('http://34.59.157.47:3000/question/test');
-        const allQuestions = response.data;
+            // Broadcast first question
+            session.players.forEach(player => {
+                if (player.ws && player.ws.readyState === 1) {
+                    player.ws.send(JSON.stringify({
+                        event: 'newQuestion',
+                        payload: session.currentQuestion
+                    }));
+                }
+            });
 
-        // Select 50 random questions
-        const shuffled = allQuestions.sort(() => 0.5 - Math.random());
-        const selectedQuestions = shuffled.slice(0, 50);
+            res.redirect(`/users/play/${sessionId}`);
+        } catch (err) {
+            console.error('Error fetching questions:', err.message);
+            res.status(500).send('Error retrieving quiz questions.');
+        }
+    });
 
-        // Save questions to the session
-        gameSessions[sessionId].questions = selectedQuestions;
-        gameSessions[sessionId].hostStarted = true;
+    // Route: Inform host or players game has started
+    router.get('/play/:sessionId', (req, res) => {
+        const { sessionId } = req.params;
+        const session = gameSessions[sessionId];
 
-        // Redirect to play screen
-        res.redirect(`/users/play/${sessionId}`);
-    } catch (error) {
-        console.error('Failed to fetch questions:', error.message);
-        res.status(500).send('Could not fetch questions.');
-    }
-    
-});
+        if (!session || !session.hostStarted) {
+            return res.status(404).send('Game not started or session invalid.');
+        }
 
+        res.send(`
+            <html>
+                <body>
+                    <h2>Bible Quiz Game Started!</h2>
+                    <p>WebSocket will handle real-time gameplay. Check the console or client for question events.</p>
+                </body>
+            </html>
+        `);
+    });
 
-
-module.exports = router;
-
-/*
-    // Mark game as started
-    gameSessions[sessionId].hostStarted = true;
-
-    // For now, just return a confirmation (later redirect to questions)
-    res.send(`
-        <html>
-            <body>
-                <h2>Game Started!</h2>
-                <p>Questions are being sent to players...</p>
-            </body>
-        </html>
-    `);
-    try {
-        // Fetch question bank from your server
-        const response = await axios.get('http://34.59.157.47:3000/question/test'); // Use IP version on GCP
-        const allQuestions = response.data;
-
-        // Select 50 random questions
-        const shuffled = allQuestions.sort(() => 0.5 - Math.random());
-        const selectedQuestions = shuffled.slice(0, 50);
-
-        // Save questions to the session
-        gameSessions[sessionId].questions = selectedQuestions;
-        gameSessions[sessionId].hostStarted = true;
-
-        res.redirect(`/users/play/${sessionId}`);
-    } catch (error) {
-        console.error('Failed to fetch questions:', error.message);
-        res.status(500).send('Could not fetch questions.');
-    }
-
-
-*/
-
-
-
+    return router;
+};
