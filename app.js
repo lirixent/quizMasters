@@ -26,6 +26,11 @@ const gameSessions = {}; // Shared game state
 //app.use(express.static('public'));
 // Serve static files if needed
 app.use(express.static(path.join(__dirname, 'public')));
+// Serve multiplayer.html from the public directory
+app.get('/multiplayer', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'multiplayer.html'));
+  });
+
 
 const questionRoute = require('./routes/question'); // Import the question route module
 const userRoute = require('./routes/users')(gameSessions); // Import the users route module
