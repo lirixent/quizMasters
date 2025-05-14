@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Quiz Client</title>
+</head>
+<body>
+    <h1>Quiz Client</h1>
+    <script>
+        const ws = new WebSocket('ws://localhost:3000'); // use your WebSocket server URL
+
+        ws.onopen = () => {
+            console.log("Connected!");
+
+            ws.send(JSON.stringify({
+                event: 'joinSession',
+                sessionId: 'room1',
+                payload: { name: 'Ben' }
+            }));
+
+            // After joining, start the game manually:
+            // Replace this with a button click or auto-fetch questions from backend
+            ws.send(JSON.stringify({
+                event: 'startGame',
+                sessionId: 'room1',
+                payload: {
+                    questions: [
+                        {
+                            id: 1,
+                            text: "What is the capital of Nigeria?",
+                            options: ["Lagos", "Abuja", "Port Harcourt", "Kano"],
+                            correctAnswer: "Abuja",
+                            category: "Geography"
+                        }
+                    ]
+                }
+            }));
+        };
+
+        ws.onmessage = (message) => {
+            const data = JSON.parse(message.data);
+            console.log("Server says:", data);
+
+            if (data.event === 'newQuestion') {
+                const q = data.payload;
+                console.log("Question:", q.text);
+                // simulate answer
+                setTimeout(() => {
+                    ws.send(JSON.stringify({
+                        event: 'submitAnswer',
+                        sessionId: 'room1',
+                        payload: {
+                            name: 'Ben',
+                            answer: 'Abuja'
+                        }
+                    }));
+                }, 3000);
+            }
+
+            if (data.event === 'gameOver') {
+                console.log("Game over!", data.payload);
+            }
+        };
+
+        ws.onclose = () => {
+            console.log("Disconnected from server.");
+        };
+    </script>
+</body>
+</html>

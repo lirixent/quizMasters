@@ -153,9 +153,68 @@ module.exports = function (gameSessions) {
                 <body>
                     <h2>Bible Quiz Game Started!</h2>
                     <p>WebSocket will handle real-time gameplay. Check the console or client for question events.</p>
+                    <script>
+                        const sessionId = "${sessionId}";
+                        const socket = new WebSocket("ws://" + window.location.hostname + ":3000");
+                        let playerName = prompt("Enter your name") || "Guest";
+        
+                        socket.onopen = () => {
+                            socket.send(JSON.stringify({
+                                event: 'joinSession',
+                                sessionId: sessionId,
+                                payload: { name: playerName }
+                            }));
+                        };
+        
+                        socket.onmessage = (event) => {
+                            const data = JSON.parse(event.data);
+                            switch (data.event) {
+                                case 'playerJoined':
+                                    console.log(data.payload.name + ' joined the game');
+                                    break;
+        
+                                case 'newQuestion':
+                                    const question = data.payload;
+                                    document.body.innerHTML += '
+                                        <h3>${question.text}</h3>
+                                        <div id="answers"></div>
+                                    ';
+                                    const answersDiv = document.getElementById('answers');
+                                    question.options.forEach(option => {
+                                        const btn = document.createElement('button');
+                                        btn.textContent = option;
+                                        btn.onclick = () => {
+                                            socket.send(JSON.stringify({
+                                                event: 'submitAnswer',
+                                                sessionId: sessionId,
+                                                payload: {
+                                                    name: playerName,
+                                                    answer: option
+                                                }
+                                            }));
+                                        };
+                                        answersDiv.appendChild(btn);
+                                    });
+                                    break;
+        
+                                case 'answerResult':
+                                    alert(data.payload.correct ? 'Correct!' : 'Wrong!');
+                                    break;
+        
+                                case 'gameOver':
+                                    alert("Game Over! Top Players:");
+                                    console.log(data.payload.leaderboardTop3);
+                                    break;
+        
+                                default:
+                                    console.warn('Unhandled event:', data.event);
+                            }
+                        };
+                    </script>
                 </body>
             </html>
         `);
+        
     });
 
     return router;
