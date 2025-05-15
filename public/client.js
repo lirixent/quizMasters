@@ -30,6 +30,13 @@ socket.addEventListener('message', (event) => {
     if (message.event === 'gameOver') {
         showLeaderboard(message.payload);
     }
+
+    if (message.event === 'playerJoined') {
+        console.log(`${message.payload.name} joined the game`);
+    }
+    
+
+
 });
 
 // When "Start Game" button is clicked
