@@ -80,6 +80,10 @@ mongoose.set('debug', true);
 
 // Start the server
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+/*app.listen(PORT, () => {
     console.log(`Server is up and running on port ${PORT}...`);
+});
+*/
+server.listen(PORT, () => {
+    console.log(`Express + WebSocket server is running on port ${PORT}...`);
 });

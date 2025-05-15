@@ -1,194 +1,105 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Multiplayer Bible Quiz</title>
+  <title>Multiplayer Quiz</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      padding: 20px;
-      background-color: #f0f0f0;
-    }
-    #gameArea {
-      margin-top: 20px;
-      background: #fff;
-      padding: 20px;
-      border-radius: 8px;
-      display: none;
-    }
-    #questionText {
-      font-size: 1.2em;
-      margin-bottom: 10px;
-    }
-    input, button {
-      padding: 8px;
-      margin: 5px 0;
-    }
-    #feedback {
-      margin-top: 10px;
-      font-weight: bold;
-    }
-    #log {
-      margin-top: 20px;
-      background: #222;
-      color: #0f0;
-      padding: 10px;
-      border-radius: 6px;
-      height: 200px;
-      overflow-y: auto;
-      font-size: 0.9em;
-    }
+    body { font-family: Arial; margin: 2rem; }
+    #messages { margin-top: 1rem; }
+    .hidden { display: none; }
   </style>
 </head>
 <body>
-  <h1>📖 Multiplayer Bible Quiz</h1>
+  <h2>Multiplayer Bible Quiz</h2>
 
-  <div>
-    <label>Session ID:
-      <input type="text" id="sessionId" placeholder="e.g., ABC123" />
-    </label>
-    <br/>
-    <label>Your Name:
-      <input type="text" id="playerName" placeholder="e.g., Ben" />
-    </label>
-    <br/>
-    <button onclick="joinSession()">Join Game</button>
+  <div id="host-join-options">
+    <button onclick="hostGame()">Host Game</button>
+    <input type="text" id="sessionIdInput" placeholder="Enter Session ID to Join">
+    <button onclick="joinGame()">Join Game</button>
   </div>
 
-  <div id="gameArea">
-    <h2 id="questionText">Waiting for question...</h2>
-    <input type="text" id="answerInput" placeholder="Type your answer..." />
-    <button onclick="submitAnswer()">Submit Answer</button>
-    <div id="feedback"></div>
-  </div>
+  <div id="game-area" class="hidden">
+    <p><strong>Session ID:</strong> <span id="sessionIdDisplay"></span></p>
+    <p><strong>Status:</strong> <span id="status">Connecting...</span></p>
 
-  <div style="margin-top: 15px;">
-    <button onclick="startGame()">Start Game (Host Only)</button>
-  </div>
+    <div>
+      <input type="text" id="msg" placeholder="Say something">
+      <button onclick="sendMessage()">Send</button>
+    </div>
 
-  <pre id="log"></pre>
+    <div id="messages"></div>
+  </div>
 
   <script>
-    let socket;
-    let currentSessionId = '';
-    let playerName = '';
+    let sessionId = null;
+    let socket = null;
 
-    function log(message) {
-      const logBox = document.getElementById('log');
-      logBox.textContent += message + '\n';
-      logBox.scrollTop = logBox.scrollHeight;
+    async function hostGame() {
+      const res = await fetch('/users/host', { method: 'POST' });
+      const data = await res.json();
+      sessionId = data.sessionId;
+      document.getElementById('sessionIdDisplay').innerText = sessionId;
+      initWebSocket();
     }
 
-    function joinSession() {
-      currentSessionId = document.getElementById('sessionId').value.trim();
-      playerName = document.getElementById('playerName').value.trim();
-
-      if (!currentSessionId || !playerName) {
-        alert('Please enter both session ID and your name');
+    async function joinGame() {
+      sessionId = document.getElementById('sessionIdInput').value.trim();
+      if (!sessionId) {
+        alert("Please enter a valid session ID");
         return;
       }
 
-      socket = new WebSocket(`ws://${window.location.host}`);
-
-      socket.addEventListener('open', () => {
-        log(`✅ Connected to server`);
-        socket.send(JSON.stringify({
-          event: 'joinSession',
-          sessionId: currentSessionId,
-          payload: { name: playerName }
-        }));
-        document.getElementById('gameArea').style.display = 'block';
+      const res = await fetch('/users/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId })
       });
 
-      socket.addEventListener('message', (event) => {
+      const data = await res.json();
+      if (data.error) {
+        alert("Join failed: " + data.error);
+        return;
+      }
+
+      document.getElementById('sessionIdDisplay').innerText = sessionId;
+      initWebSocket();
+    }
+
+    function initWebSocket() {
+      // Show game area
+      document.getElementById('host-join-options').classList.add('hidden');
+      document.getElementById('game-area').classList.remove('hidden');
+
+      socket = new WebSocket(`ws://${window.location.hostname}:3000`);
+
+      socket.onopen = () => {
+        document.getElementById('status').innerText = 'Connected ✅';
+        // Notify server of session
+        socket.send(JSON.stringify({ type: 'join', sessionId }));
+      };
+
+      socket.onmessage = (event) => {
         const msg = JSON.parse(event.data);
-        handleServerEvent(msg);
-      });
+        const div = document.createElement('div');
+        div.innerText = `[${msg.type}] ${msg.content}`;
+        document.getElementById('messages').appendChild(div);
+      };
 
-      socket.addEventListener('close', () => {
-        log('⚠️ Disconnected from server');
-      });
+      socket.onclose = () => {
+        document.getElementById('status').innerText = 'Disconnected ⚠️';
+      };
 
-      socket.addEventListener('error', (err) => {
-        log('❌ WebSocket error: ' + err.message);
-      });
+      socket.onerror = (e) => {
+        console.error("WebSocket error", e);
+        document.getElementById('status').innerText = 'Error ❌';
+      };
     }
 
-    function startGame() {
-      const exampleQuestions = [
-        {
-          id: '1',
-          question: 'Who was the first man in the Bible?',
-          correctAnswer: 'Adam',
-          category: 'Genesis'
-        },
-        {
-          id: '2',
-          question: 'What is the last book of the Bible?',
-          correctAnswer: 'Revelation',
-          category: 'Revelation'
-        },
-        {
-          id: '3',
-          question: 'How many days did God take to create the world?',
-          correctAnswer: '6',
-          category: 'Genesis'
-        }
-      ];
-
+    function sendMessage() {
+      const input = document.getElementById('msg');
+      const content = input.value;
       if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({
-          event: 'startGame',
-          sessionId: currentSessionId,
-          payload: { questions: exampleQuestions }
-        }));
-        log('🟢 Game started with example questions');
-      }
-    }
-
-    function submitAnswer() {
-      const answer = document.getElementById('answerInput').value.trim();
-      if (!answer) return alert('Please enter your answer.');
-
-      if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({
-          event: 'submitAnswer',
-          sessionId: currentSessionId,
-          payload: {
-            name: playerName,
-            answer: answer
-          }
-        }));
-        document.getElementById('answerInput').value = '';
-        document.getElementById('feedback').textContent = 'Answer submitted... waiting for result.';
-      }
-    }
-
-    function handleServerEvent(msg) {
-      switch (msg.event) {
-        case 'playerJoined':
-          log(`👤 ${msg.payload.name} joined the session`);
-          break;
-        case 'newQuestion':
-          document.getElementById('questionText').textContent = msg.payload.question;
-          document.getElementById('feedback').textContent = '';
-          log(`❓ New question: ${msg.payload.question}`);
-          break;
-        case 'answerResult':
-          const res = msg.payload;
-          document.getElementById('feedback').textContent = `${res.name}'s answer was ${res.correct ? '✅ correct' : '❌ incorrect'}. Score: ${res.score}, Time: ${res.timeTaken}s`;
-          break;
-        case 'gameOver':
-          log('🏁 Game Over!');
-          log('🎉 Leaderboard:');
-          msg.payload.leaderboardTop3.forEach((p, i) => {
-            log(`${i + 1}. ${p.name} - ${p.score} pts (${p.totalTime}s)`);
-          });
-          log('🧠 Full Stats:\n' + JSON.stringify(msg.payload.playerStats, null, 2));
-          break;
-        default:
-          log(`ℹ️ Unknown event: ${JSON.stringify(msg)}`);
+        socket.send(JSON.stringify({ type: 'message', sessionId, content }));
+        input.value = '';
       }
     }
   </script>
