@@ -1,107 +1,43 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Multiplayer Quiz</title>
-  <style>
-    body { font-family: Arial; margin: 2rem; }
-    #messages { margin-top: 1rem; }
-    .hidden { display: none; }
-  </style>
+    <meta charset="UTF-8">
+    <title>Multiplayer Bible Quiz</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+        }
+        h2, h3 {
+            color: #333;
+        }
+        button {
+            display: block;
+            margin: 10px 0;
+            padding: 10px 15px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        #startBtn {
+            background-color: #4CAF50;
+            color: white;
+            display: none;
+        }
+    </style>
 </head>
 <body>
-  <h2>Multiplayer Bible Quiz</h2>
+    <h2>Multiplayer Bible Quiz</h2>
 
-  <div id="host-join-options">
-    <button onclick="hostGame()">Host Game</button>
-    <input type="text" id="sessionIdInput" placeholder="Enter Session ID to Join">
-    <button onclick="joinGame()">Join Game</button>
-  </div>
-
-  <div id="game-area" class="hidden">
-    <p><strong>Session ID:</strong> <span id="sessionIdDisplay"></span></p>
-    <p><strong>Status:</strong> <span id="status">Connecting...</span></p>
-
-    <div>
-      <input type="text" id="msg" placeholder="Say something">
-      <button onclick="sendMessage()">Send</button>
+    <!-- Container to show questions and leaderboard -->
+    <div id="question">
+        <p>Waiting for host to start the game...</p>
     </div>
 
-    <div id="messages"></div>
-  </div>
+    <!-- Host Start Button -->
+    <button id="startBtn">Start Game</button>
+    <button onclick="window.location.href='/users/host'">Host Game</button>
 
-  <script>
-    let sessionId = null;
-    let socket = null;
-
-    async function hostGame() {
-      const res = await fetch('/users/host', { method: 'POST' });
-      const data = await res.json();
-      sessionId = data.sessionId;
-      document.getElementById('sessionIdDisplay').innerText = sessionId;
-      initWebSocket();
-    }
-
-    async function joinGame() {
-      sessionId = document.getElementById('sessionIdInput').value.trim();
-      if (!sessionId) {
-        alert("Please enter a valid session ID");
-        return;
-      }
-
-      const res = await fetch('/users/join', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId })
-      });
-
-      const data = await res.json();
-      if (data.error) {
-        alert("Join failed: " + data.error);
-        return;
-      }
-
-      document.getElementById('sessionIdDisplay').innerText = sessionId;
-      initWebSocket();
-    }
-
-    function initWebSocket() {
-      // Show game area
-      document.getElementById('host-join-options').classList.add('hidden');
-      document.getElementById('game-area').classList.remove('hidden');
-
-      socket = new WebSocket(`ws://${window.location.hostname}:3000`);
-
-      socket.onopen = () => {
-        document.getElementById('status').innerText = 'Connected ✅';
-        // Notify server of session
-        socket.send(JSON.stringify({ type: 'join', sessionId }));
-      };
-
-      socket.onmessage = (event) => {
-        const msg = JSON.parse(event.data);
-        const div = document.createElement('div');
-        div.innerText = `[${msg.type}] ${msg.content}`;
-        document.getElementById('messages').appendChild(div);
-      };
-
-      socket.onclose = () => {
-        document.getElementById('status').innerText = 'Disconnected ⚠️';
-      };
-
-      socket.onerror = (e) => {
-        console.error("WebSocket error", e);
-        document.getElementById('status').innerText = 'Error ❌';
-      };
-    }
-
-    function sendMessage() {
-      const input = document.getElementById('msg');
-      const content = input.value;
-      if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ type: 'message', sessionId, content }));
-        input.value = '';
-      }
-    }
-  </script>
+    <!-- Link to the client WebSocket logic -->
+    <script src="/js/client.js"></script>
 </body>
 </html>
