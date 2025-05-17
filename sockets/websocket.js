@@ -62,17 +62,20 @@ module.exports = (wss, gameSessions) => {
                         */
 
 
-                        // Safely initialize playerData if not already present
-    if (!session.playerData[payload.name]) {
-        session.playerData[payload.name] = {
-            name: payload.name,
-            score: 0,
-            totalTime: 0,
-            answers: [],
-            categoryStats: {}
-        };
-    }
+ // Safely initialize playerData if not already present
+if (!session.playerData) {
+    session.playerData = {};
+}
 
+if (!session.playerData[payload.name]) {
+    session.playerData[payload.name] = {
+        name: payload.name,
+        score: 0,
+        totalTime: 0,
+        answers: [],
+        categoryStats: {}
+    };
+}
 
                         broadcast(session.players, {
                             event: 'playerJoined',
