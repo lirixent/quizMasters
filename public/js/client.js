@@ -64,6 +64,18 @@ socket.addEventListener('message', (event) => {
     const message = JSON.parse(event.data);
     console.log('Received:', message);
 
+    if (message.event === 'error' && message.payload === 'Session not found.') {
+        console.warn('Retrying join in 1s...');
+        setTimeout(() => {
+            socket.send(JSON.stringify({
+                event: 'joinSession',
+                sessionId,
+                payload: { name: playerName }
+            }));
+        }, 1000);
+        return;
+    }
+
     if (message.event === 'newQuestion') {
         const question = message.payload;
         showQuestion(question);
