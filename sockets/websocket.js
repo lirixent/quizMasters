@@ -28,17 +28,51 @@ module.exports = (wss, gameSessions) => {
 
                 switch (event) {
                     case 'joinSession':
+                        // Initialize session if it doesn't exist
+
+                        console.log("Incoming data:", data);
+
+    if (!gameSessions[sessionId]) {
+        gameSessions[sessionId] = {
+            players: [],
+            playerData: {},
+            questions: [],
+            currentQuestionIndex: 0,
+            startTime: Date.now(),
+            ended: false
+        };
+    }
+
+    const session = gameSessions[sessionId];
+
+
+
                         ws.roomId = sessionId;
                         ws.playerName = payload.name;
                         session.players.push(ws);
 
-                        session.playerData[payload.name] = {
+                       
+                       /* session.playerData[payload.name] = {
                             name: payload.name,
                             score: 0,
                             totalTime: 0,
                             answers: [],
                             categoryStats: {}
                         };
+                        */
+
+
+                        // Safely initialize playerData if not already present
+    if (!session.playerData[payload.name]) {
+        session.playerData[payload.name] = {
+            name: payload.name,
+            score: 0,
+            totalTime: 0,
+            answers: [],
+            categoryStats: {}
+        };
+    }
+
 
                         broadcast(session.players, {
                             event: 'playerJoined',
